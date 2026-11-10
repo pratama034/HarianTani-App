@@ -27,7 +27,26 @@ type StoredUser = {
 const STORAGE_KEYS = {
   SESSION: 'ht_auth_session',
   USERS: 'ht_registered_users',
+  ONBOARDING: 'ht_onboarding_completed',
+  ACCESS_TOKEN: 'access_token', // Sesuai Slide 9 & 11: Kunci penyimpanan SecureStore untuk JWT
 };
+
+export async function hasCompletedOnboarding(): Promise<boolean> {
+  try {
+    const val = await readStorageItem(STORAGE_KEYS.ONBOARDING);
+    return val === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export async function setCompletedOnboarding(): Promise<void> {
+  try {
+    await writeStorageItem(STORAGE_KEYS.ONBOARDING, 'true');
+  } catch {
+    // ignore
+  }
+}
 
 // Fallback in-memory storage untuk Web atau lingkungan saat SecureStore tidak tersedia.
 // PERINGATAN KEAMANAN: Memori lokal ini murni untuk kompatibilitas demonstrasi non-native
@@ -99,10 +118,55 @@ async function hashPassword(password: string, salt: string): Promise<string> {
 /**
  * Menyimpan sesi aktif ke Secure Storage.
  */
+/**
+ * Menyimpan access token JWT ke Secure Storage.
+ * Sesuai Slide 9 (Task 01): await SecureStore.setItemAsync("access_token", data.access_token)
+ */
+export async function saveAccessToken(token: string): Promise<boolean> {
+  try {
+    await writeStorageItem(STORAGE_KEYS.ACCESS_TOKEN, token);
+    return true;
+  } catch {
+    console.error('Gagal menyimpan access_token ke storage.');
+    return false;
+  }
+}
+
+/**
+ * Membaca access token JWT dari Secure Storage.
+ * Sesuai Slide 11 (Task 02): await SecureStore.getItemAsync("access_token")
+ */
+export async function getAccessToken(): Promise<string | null> {
+  try {
+    return await readStorageItem(STORAGE_KEYS.ACCESS_TOKEN);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Menghapus access token JWT dari Secure Storage.
+ * Sesuai Slide 12 (Task 03): await SecureStore.deleteItemAsync("access_token")
+ */
+export async function deleteAccessToken(): Promise<boolean> {
+  try {
+    await deleteStorageItem(STORAGE_KEYS.ACCESS_TOKEN);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Menyimpan sesi aktif ke Secure Storage (Session JSON + Access Token terpisah).
+ */
 export async function saveSession(session: AuthSession): Promise<boolean> {
   try {
     const serialized = JSON.stringify(session);
     await writeStorageItem(STORAGE_KEYS.SESSION, serialized);
+    if (session.token) {
+      await saveAccessToken(session.token);
+    }
     return true;
   } catch {
     console.error('Gagal menyimpan sesi autentikasi ke storage.');
@@ -133,7 +197,10 @@ export async function getSession(): Promise<AuthSession | null> {
  */
 export async function clearSession(): Promise<boolean> {
   try {
-    await deleteStorageItem(STORAGE_KEYS.SESSION);
+    await Promise.all([
+      deleteStorageItem(STORAGE_KEYS.SESSION),
+      deleteAccessToken(),
+    ]);
     return true;
   } catch {
     console.error('Gagal menghapus sesi autentikasi dari storage.');
@@ -147,8 +214,31 @@ export async function clearSession(): Promise<boolean> {
 async function getStoredUsers(): Promise<StoredUser[]> {
   try {
     const raw = await readStorageItem(STORAGE_KEYS.USERS);
-    if (!raw) return [];
-    return JSON.parse(raw) as StoredUser[];
+    let users: StoredUser[] = [];
+    if (raw) {
+      users = JSON.parse(raw) as StoredUser[];
+    }
+
+    // Pastikan akun demo Pak Budi tersedia secara default dengan hash terenkripsi
+    const hasDemo = users.some(
+      (u) => u.email.toLowerCase() === 'budi.santoso@tani.id'
+    );
+    if (!hasDemo) {
+      const salt = Crypto.randomUUID();
+      const passwordHash = await hashPassword('PanenMelimpah2025', salt);
+      const demoUser: StoredUser = {
+        id: 'user-budi-santoso-demo',
+        name: 'Budi Santoso',
+        email: 'budi.santoso@tani.id',
+        passwordHash,
+        salt,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      };
+      users.push(demoUser);
+      await writeStorageItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    }
+
+    return users;
   } catch {
     console.error('Gagal membaca daftar pengguna dari storage.');
     return [];

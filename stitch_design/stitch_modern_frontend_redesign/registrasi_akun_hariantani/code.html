@@ -1,0 +1,251 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><meta content="mobile_stack" name="shell-type"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"><link href="https://fonts.googleapis.com" rel="preconnect"><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&amp;family=Space+Grotesk:wght@600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: 'class', theme: { extend: { colors: { 'inverse-on-surface': '#eef2eb', 'secondary-container': '#91f78e', 'surface-tint-green': '#E8F5E9', 'on-error-container': '#93000a', 'on-primary-fixed-variant': '#005312', 'border-subtle': '#D8E5DA', 'on-primary-fixed': '#002204', 'surface-variant': '#dfe4dd', 'surface-sage': '#EBF3EC', 'on-tertiary-fixed-variant': '#0c5216', 'inverse-surface': '#2d322d', 'surface-dark-card': '#1A221C', 'primary-fixed-dim': '#88d982', 'tertiary-fixed-dim': '#91d78a', 'surface-container-lowest': '#ffffff', 'surface-dim': '#d7dbd5', 'surface': '#f6fbf4', 'on-tertiary': '#ffffff', 'on-error': '#ffffff', 'status-profit': '#388E3C', 'secondary-fixed': '#94f990', 'on-secondary': '#ffffff', 'status-loss': '#D32F2F', 'primary': '#0d631b', 'error': '#ba1a1a', 'surface-container-high': '#e5e9e3', 'on-primary-container': '#cbffc2', 'primary-fixed': '#a3f69c', 'tertiary-fixed': '#acf4a4', 'secondary': '#006e1c', 'surface-container-highest': '#dfe4dd', 'on-tertiary-container': '#c8ffbf', 'outline': '#707a6c', 'surface-container-low': '#f0f5ee', 'on-tertiary-fixed': '#002203', 'outline-variant': '#bfcaba', 'error-container': '#ffdad6', 'tertiary-container': '#3a7b39', 'secondary-fixed-dim': '#78dc77', 'inverse-primary': '#88d982', 'on-background': '#181d19', 'on-secondary-fixed-variant': '#005313', 'background': '#f6fbf4', 'status-warning': '#F57C00', 'tertiary': '#1f6223', 'on-secondary-container': '#00731e', 'on-primary': '#ffffff', 'on-secondary-fixed': '#002204', 'on-surface-variant': '#40493d', 'surface-bright': '#f6fbf4', 'surface-container': '#ebefe9', 'on-surface': '#181d19', 'surface-tint': '#1b6d24', 'primary-container': '#2e7d32', 'surface-sage-light': '#F1F8E9' }, borderRadius: { 'DEFAULT': '1rem', 'lg': '2rem', 'xl': '3rem', 'full': '9999px' }, spacing: { 'space-xs': '0.25rem', 'space-md': '1rem', 'space-xl': '2rem', 'gutter-sm': '0.75rem', 'margin-sm': '1rem', 'space-lg': '1.5rem', 'margin': '1.25rem', 'gutter': '1rem', 'space-sm': '0.5rem' }, fontFamily: { 'body-md': ['Plus Jakarta Sans'], 'headline-lg-mobile': ['Space Grotesk'], 'label-sm': ['Plus Jakarta Sans'], 'body-sm': ['Plus Jakarta Sans'], 'body-lg': ['Plus Jakarta Sans'], 'display-lg': ['Space Grotesk'], 'headline-lg': ['Space Grotesk'], 'currency-display': ['Space Grotesk'], 'headline-sm': ['Space Grotesk'], 'headline-md': ['Space Grotesk'], 'label-md': ['Plus Jakarta Sans'], 'label-lg': ['Plus Jakarta Sans'] }, fontSize: { 'body-md': ['14px', { lineHeight: '20px', fontWeight: '400' }], 'headline-lg-mobile': ['24px', { lineHeight: '32px', letterSpacing: '-0.02em', fontWeight: '700' }], 'label-sm': ['11px', { lineHeight: '16px', letterSpacing: '0.04em', fontWeight: '700' }], 'body-sm': ['12px', { lineHeight: '18px', fontWeight: '400' }], 'body-lg': ['16px', { lineHeight: '24px', fontWeight: '400' }], 'display-lg': ['36px', { lineHeight: '44px', letterSpacing: '-0.03em', fontWeight: '700' }], 'headline-lg': ['28px', { lineHeight: '36px', letterSpacing: '-0.02em', fontWeight: '700' }], 'currency-display': ['22px', { lineHeight: '28px', fontWeight: '700' }], 'headline-sm': ['18px', { lineHeight: '24px', fontWeight: '600' }], 'headline-md': ['20px', { lineHeight: '28px', letterSpacing: '-0.01em', fontWeight: '600' }], 'label-md': ['13px', { lineHeight: '18px', fontWeight: '600' }], 'label-lg': ['15px', { lineHeight: '20px', fontWeight: '600' }] } } } };</script><style>@layer base { html, body { min-height: 100%; margin: 0; padding: 0; } .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); } .pt-safe { padding-top: env(safe-area-inset-top, 0px); } } ::-webkit-scrollbar { display: none; }</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface font-body-md text-on-surface antialiased min-h-screen flex flex-col"><header class="fixed top-0 inset-x-0 z-50 bg-primary-container pt-safe shadow-md"><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-space-sm"><button aria-label="Go back" class="w-11 h-11 rounded-full bg-white/20 flex items-center justify-center text-on-primary hover:bg-white/30 active:scale-95 transition-all" onclick="history.back()" type="button"><span class="material-symbols-outlined text-[22px]">arrow_back</span></button><div class="flex items-center gap-space-xs ml-space-xs"><div class="w-8 h-8 rounded-full bg-surface-container-lowest flex items-center justify-center"><span class="material-symbols-outlined text-primary-container text-[20px]">potted_plant</span></div><span class="font-headline-sm text-headline-sm text-on-primary font-bold tracking-tight">HarianTani</span></div></div><div class="flex items-center gap-space-sm"><div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 pb-safe bg-surface"><div class="flex flex-col w-full px-margin pb-space-xl">
+<!-- Subtle Visual Hero Illustration Banner inspired by organic journey planner -->
+<div class="relative w-full rounded-lg bg-surface-sage p-space-md mt-space-sm mb-space-md shadow-sm overflow-hidden">
+<div class="absolute -right-6 -bottom-6 w-32 h-32 rounded-full bg-secondary-container/30 blur-2xl pointer-events-none"></div>
+<div class="flex items-center gap-space-sm mb-space-xs">
+<div class="w-7 h-7 rounded-full bg-surface-tint-green flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">spa</span>
+</div>
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-primary">Langkah Awal Digitalisasi Tani</span>
+</div>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-space-xs">Daftar Akun Petani Baru</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Mulai kelola operasional dan keuangan usaha tani Anda secara rapi dan digital.</p>
+</div>
+<!-- Hardware & Security Trust Badge -->
+<div class="w-full bg-surface-container-low rounded-xl px-space-md py-space-sm mb-space-lg flex items-center justify-between shadow-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full bg-surface-container-lowest flex items-center justify-center text-primary shadow-sm">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">security</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface">Enkripsi Kriptografi Lokal</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant font-normal">SHA-256 with Salt • Offline-Ready</p>
+</div>
+</div>
+<span class="inline-flex items-center gap-1 bg-surface-tint-green text-primary px-space-xs py-1 rounded-full text-label-sm font-label-sm">
+<span class="w-2 h-2 rounded-full bg-status-profit animate-pulse"></span>
+      Aman
+    </span>
+</div>
+<!-- Main Registration Card -->
+<div class="bg-surface-container-lowest rounded-lg p-space-lg shadow-sm space-y-space-md">
+<!-- Field: Role / Agricultural Profile Selector -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-space-xs">Tipe Usaha Tani Anda</label>
+<div class="flex gap-space-xs overflow-x-auto py-1 no-scrollbar">
+<button class="role-chip active-chip flex-shrink-0 h-12 px-space-md rounded-full bg-primary text-on-primary font-label-md text-label-md flex items-center gap-1 shadow-sm transition-all" onclick="selectRole(this)" type="button">
+<span class="material-symbols-outlined text-[18px]">agriculture</span>
+<span class="">Petani Mandiri</span>
+</button>
+<button class="role-chip flex-shrink-0 h-12 px-space-md rounded-full bg-surface-container-low text-on-surface-variant font-label-md text-label-md flex items-center gap-1 transition-all" onclick="selectRole(this)" type="button">
+<span class="material-symbols-outlined text-[18px]">groups</span>
+<span class="">Kelompok Tani</span>
+</button>
+<button class="role-chip flex-shrink-0 h-12 px-space-md rounded-full bg-surface-container-low text-on-surface-variant font-label-md text-label-md flex items-center gap-1 transition-all" onclick="selectRole(this)" type="button">
+<span class="material-symbols-outlined text-[18px]">eco</span>
+<span class="">Pekebun Sayur/Buah</span>
+</button>
+</div>
+</div>
+<!-- Field: Full Name -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-space-xs" for="fullName">Nama Lengkap</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-4 text-outline text-[20px] pointer-events-none">person</span>
+<input class="w-full h-12 pl-12 pr-4 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface placeholder:text-outline focus:outline-none focus:bg-surface-container-lowest focus:shadow-md transition-all" id="fullName" placeholder="Contoh: Pak Budi Santoso" type="text">
+</div>
+</div>
+<!-- Field: Email -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-space-xs" for="emailInput">Alamat Email</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-4 text-outline text-[20px] pointer-events-none">alternate_email</span>
+<input class="w-full h-12 pl-12 pr-4 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface placeholder:text-outline focus:outline-none focus:bg-surface-container-lowest focus:shadow-md transition-all" id="emailInput" placeholder="petani@hariantani.id" type="email">
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1.5 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-primary">info</span>
+        Digunakan untuk pemulihan akun &amp; laporan mingguan
+      </p>
+</div>
+<!-- Field: Password -->
+<div>
+<div class="flex items-center justify-between mb-space-xs">
+<label class="font-label-md text-label-md text-on-surface" for="passwordInput">Kata Sandi</label>
+<span class="font-label-sm text-label-sm text-outline">Min. 6 karakter</span>
+</div>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-4 text-outline text-[20px] pointer-events-none">lock</span>
+<input class="w-full h-12 pl-12 pr-12 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface placeholder:text-outline focus:outline-none focus:bg-surface-container-lowest focus:shadow-md transition-all" id="passwordInput" oninput="checkPasswordStrength(this.value)" placeholder="••••••••" type="password">
+<button class="absolute right-3 w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface" onclick="togglePasswordVisibility('passwordInput', 'toggleEyeIcon1')" type="button">
+<span class="material-symbols-outlined text-[20px]" id="toggleEyeIcon1">visibility</span>
+</button>
+</div>
+<!-- Password Strength Indicator Capsule -->
+<div class="mt-2.5 p-space-xs rounded-lg bg-surface-sage-light flex items-center justify-between px-space-sm">
+<div class="flex items-center gap-1.5">
+<div class="flex gap-1">
+<span class="w-6 h-1.5 rounded-full bg-status-profit" id="strengthBar1"></span>
+<span class="w-6 h-1.5 rounded-full bg-status-profit" id="strengthBar2"></span>
+<span class="w-6 h-1.5 rounded-full bg-status-profit" id="strengthBar3"></span>
+</div>
+<span class="font-label-sm text-label-sm text-status-profit ml-1" id="strengthLabel">Sangat Kuat</span>
+</div>
+<span class="material-symbols-outlined text-status-profit text-[16px]">verified_user</span>
+</div>
+</div>
+<!-- Field: Confirm Password -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-space-xs" for="confirmPasswordInput">Konfirmasi Kata Sandi</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-4 text-outline text-[20px] pointer-events-none">check_circle</span>
+<input class="w-full h-12 pl-12 pr-12 rounded-xl bg-surface-container-low font-body-md text-body-md text-on-surface placeholder:text-outline focus:outline-none focus:bg-surface-container-lowest focus:shadow-md transition-all" id="confirmPasswordInput" oninput="checkPasswordMatch()" placeholder="••••••••" type="password">
+<button class="absolute right-3 w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface" onclick="togglePasswordVisibility('confirmPasswordInput', 'toggleEyeIcon2')" type="button">
+<span class="material-symbols-outlined text-[20px]" id="toggleEyeIcon2">visibility</span>
+</button>
+</div>
+<div class="mt-1.5 flex items-center gap-1 font-body-sm text-body-sm text-status-profit" id="matchNotice">
+<span class="material-symbols-outlined text-[16px]">task_alt</span>
+<span class="">Kata sandi cocok dan siap dienkripsi</span>
+</div>
+</div>
+<!-- Checkbox Agreement -->
+<div class="pt-space-xs">
+<label class="flex items-start gap-space-sm cursor-pointer select-none">
+<input checked="" class="mt-0.5 w-5 h-5 rounded accent-primary cursor-pointer" id="termsCheck" type="checkbox">
+<span class="font-body-sm text-body-sm text-on-surface-variant">
+          Saya menyetujui <span class="text-primary font-bold underline decoration-primary/40 underline-offset-2">Ketentuan Penggunaan</span> &amp; <span class="text-primary font-bold underline decoration-primary/40 underline-offset-2">Kebijakan Privasi Data Tani</span>.
+        </span>
+</label>
+</div>
+</div>
+<!-- Telemetry Dark Pod: Local Offline Ready Status -->
+<div class="mt-space-md w-full bg-surface-dark-card rounded-lg p-space-md text-inverse-on-surface shadow-md">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary-container text-[20px]">cloud_sync</span>
+<span class="font-label-md text-label-md text-inverse-on-surface">Penyimpanan Terdistribusi</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-secondary-container">100%</span>
+</div>
+<div class="w-full h-2 rounded-full bg-inverse-surface overflow-hidden mb-2">
+<div class="h-full bg-secondary-container w-full rounded-full"></div>
+</div>
+<p class="font-body-sm text-body-sm text-surface-variant">Data panen dan buku kas Anda tetap aman dicatat tanpa sinyal internet di tengah ladang.</p>
+</div>
+<!-- Action CTAs -->
+<div class="mt-space-lg space-y-space-md">
+<button class="w-full h-14 rounded-full bg-primary-container text-on-primary font-headline-sm text-headline-sm flex items-center justify-center gap-2 shadow-lg active:scale-98 transition-all hover:bg-primary" onclick="handleRegistration()" type="button">
+<span class="material-symbols-outlined text-[22px]">how_to_reg</span>
+<span class="">Daftarkan Akun Sekarang</span>
+</button>
+<div class="text-center pt-space-xs">
+<p class="font-body-md text-body-md text-on-surface-variant">
+        Sudah punya akun? 
+        <button class="text-primary font-bold ml-1 hover:underline active:scale-95 transition-all" type="button">
+          Masuk di Sini
+        </button>
+</p>
+</div>
+</div>
+</div>
+<script>
+  function selectRole(button) {
+    const allChips = document.querySelectorAll('.role-chip');
+    allChips.forEach(chip => {
+      chip.classList.remove('bg-primary', 'text-on-primary', 'shadow-sm');
+      chip.classList.add('bg-surface-container-low', 'text-on-surface-variant');
+    });
+    button.classList.remove('bg-surface-container-low', 'text-on-surface-variant');
+    button.classList.add('bg-primary', 'text-on-primary', 'shadow-sm');
+  }
+
+  function togglePasswordVisibility(inputId, iconId) {
+    const input = document.getElementById(inputId);
+    const icon = document.getElementById(iconId);
+    if (!input || !icon) return;
+    
+    if (input.type === 'password') {
+      input.type = 'text';
+      icon.textContent = 'visibility_off';
+    } else {
+      input.type = 'password';
+      icon.textContent = 'visibility';
+    }
+  }
+
+  function checkPasswordStrength(val) {
+    const bar1 = document.getElementById('strengthBar1');
+    const bar2 = document.getElementById('strengthBar2');
+    const bar3 = document.getElementById('strengthBar3');
+    const label = document.getElementById('strengthLabel');
+
+    if (!bar1 || !bar2 || !bar3 || !label) return;
+
+    if (val.length === 0) {
+      bar1.className = 'w-6 h-1.5 rounded-full bg-surface-variant';
+      bar2.className = 'w-6 h-1.5 rounded-full bg-surface-variant';
+      bar3.className = 'w-6 h-1.5 rounded-full bg-surface-variant';
+      label.textContent = 'Masukkan kata sandi';
+      label.className = 'font-label-sm text-label-sm text-outline ml-1';
+    } else if (val.length < 6) {
+      bar1.className = 'w-6 h-1.5 rounded-full bg-status-warning';
+      bar2.className = 'w-6 h-1.5 rounded-full bg-surface-variant';
+      bar3.className = 'w-6 h-1.5 rounded-full bg-surface-variant';
+      label.textContent = 'Cukup';
+      label.className = 'font-label-sm text-label-sm text-status-warning ml-1';
+    } else if (val.length < 9) {
+      bar1.className = 'w-6 h-1.5 rounded-full bg-status-profit';
+      bar2.className = 'w-6 h-1.5 rounded-full bg-status-profit';
+      bar3.className = 'w-6 h-1.5 rounded-full bg-surface-variant';
+      label.textContent = 'Kuat';
+      label.className = 'font-label-sm text-label-sm text-status-profit ml-1';
+    } else {
+      bar1.className = 'w-6 h-1.5 rounded-full bg-status-profit';
+      bar2.className = 'w-6 h-1.5 rounded-full bg-status-profit';
+      bar3.className = 'w-6 h-1.5 rounded-full bg-status-profit';
+      label.textContent = 'Sangat Kuat';
+      label.className = 'font-label-sm text-label-sm text-status-profit ml-1';
+    }
+  }
+
+  function checkPasswordMatch() {
+    const pw = document.getElementById('passwordInput').value;
+    const confirmPw = document.getElementById('confirmPasswordInput').value;
+    const notice = document.getElementById('matchNotice');
+    if (!notice) return;
+
+    if (!confirmPw) {
+      notice.innerHTML = '';
+      return;
+    }
+
+    if (pw === confirmPw) {
+      notice.className = 'mt-1.5 flex items-center gap-1 font-body-sm text-body-sm text-status-profit';
+      notice.innerHTML = '<span class="material-symbols-outlined text-[16px]">task_alt</span><span>Kata sandi cocok dan siap dienkripsi</span>';
+    } else {
+      notice.className = 'mt-1.5 flex items-center gap-1 font-body-sm text-body-sm text-error';
+      notice.innerHTML = '<span class="material-symbols-outlined text-[16px]">error</span><span>Kata sandi belum sama</span>';
+    }
+  }
+
+  function handleRegistration() {
+    const terms = document.getElementById('termsCheck');
+    if (terms && !terms.checked) {
+      alert('Silakan setujui Ketentuan Penggunaan dan Kebijakan Privasi terlebih dahulu.');
+      return;
+    }
+    const btn = event.currentTarget;
+    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[20px]">sync</span><span>Menyiapkan Akun Tani...</span>';
+    setTimeout(() => {
+      btn.innerHTML = '<span class="material-symbols-outlined text-[20px]">check</span><span>Pendaftaran Berhasil!</span>';
+    }, 1200);
+  }
+</script></main>
+
+</body></html>

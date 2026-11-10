@@ -1,0 +1,359 @@
+<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><meta content="mobile_tab" name="shell-type"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;family=Space+Grotesk:wght@600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{width:100vw;margin:0;padding:0;background-color:#f6fbf4;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 500,'GRAD' 0,'opsz' 24;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "surface-container": "#ebefe9", "secondary-fixed": "#94f990", "status-loss": "#D32F2F", "error-container": "#ffdad6", "primary-container": "#2e7d32", "inverse-surface": "#2d322d", "surface-dim": "#d7dbd5", "surface-container-low": "#f0f5ee", "on-surface-variant": "#40493d", "on-tertiary-fixed": "#002203", "on-error": "#ffffff", "surface-container-highest": "#dfe4dd", "on-primary-fixed": "#002204", "inverse-on-surface": "#eef2eb", "surface-bright": "#f6fbf4", "border-subtle": "#D8E5DA", "surface-sage": "#EBF3EC", "on-secondary-fixed": "#002204", "status-warning": "#F57C00", "tertiary": "#1f6223", "on-tertiary": "#ffffff", "on-tertiary-container": "#c8ffbf", "on-secondary-fixed-variant": "#005313", "tertiary-container": "#3a7b39", "primary-fixed": "#a3f69c", "on-primary": "#ffffff", "on-error-container": "#93000a", "tertiary-fixed-dim": "#91d78a", "on-background": "#181d19", "surface-dark-card": "#1A221C", "secondary-container": "#91f78e", "surface-tint-green": "#E8F5E9", "secondary-fixed-dim": "#78dc77", "on-secondary-container": "#00731e", "primary": "#0d631b", "on-primary-container": "#cbffc2", "surface-sage-light": "#F1F8E9", "surface-container-high": "#e5e9e3", "on-secondary": "#ffffff", "surface-tint": "#1b6d24", "on-primary-fixed-variant": "#005312", "outline": "#707a6c", "on-surface": "#181d19", "tertiary-fixed": "#acf4a4", "on-tertiary-fixed-variant": "#0c5216", "error": "#ba1a1a", "primary-fixed-dim": "#88d982", "surface-variant": "#dfe4dd", "surface-container-lowest": "#ffffff", "background": "#f6fbf4", "inverse-primary": "#88d982", "outline-variant": "#bfcaba", "secondary": "#006e1c", "surface": "#f6fbf4", "status-profit": "#388E3C" }, "borderRadius": { "DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px" }, "spacing": { "space-lg": "1.5rem", "space-sm": "0.5rem", "space-xs": "0.25rem", "gutter": "1rem", "margin": "1.25rem", "space-md": "1rem", "margin-sm": "1rem", "space-xl": "2rem", "gutter-sm": "0.75rem" }, "fontFamily": { "body-lg": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"], "headline-lg": ["Space Grotesk"], "headline-lg-mobile": ["Space Grotesk"], "headline-md": ["Space Grotesk"], "label-sm": ["Plus Jakarta Sans"], "label-lg": ["Plus Jakarta Sans"], "headline-sm": ["Space Grotesk"], "label-md": ["Plus Jakarta Sans"], "display-lg": ["Space Grotesk"], "body-sm": ["Plus Jakarta Sans"], "currency-display": ["Space Grotesk"] }, "fontSize": { "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }], "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "headline-lg-mobile": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "headline-md": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "label-sm": ["11px", { "lineHeight": "16px", "letterSpacing": "0.04em", "fontWeight": "700" }], "label-lg": ["15px", { "lineHeight": "20px", "fontWeight": "600" }], "headline-sm": ["18px", { "lineHeight": "24px", "fontWeight": "600" }], "label-md": ["13px", { "lineHeight": "18px", "fontWeight": "600" }], "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "body-sm": ["12px", { "lineHeight": "18px", "fontWeight": "400" }], "currency-display": ["22px", { "lineHeight": "28px", "fontWeight": "700" }] } } } };</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface font-body-md text-on-surface flex flex-col min-h-screen"><header class="fixed top-0 inset-x-0 z-50 bg-[#2e7d32] shadow-[0_4px_20px_rgba(20,50,25,0.18)] pt-safe"><div class="flex justify-between items-center px-margin pt-2 pb-1 text-white/90"><span class="font-headline-sm text-label-md font-bold tracking-tight text-white">09:41</span><div class="flex items-center gap-1.5 text-white/80"><span class="material-symbols-outlined text-[16px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[16px]">wifi</span><span class="material-symbols-outlined text-[18px]">battery_full</span></div></div><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-2.5"><div class="bg-white/95 rounded-xl p-1 shadow-sm flex items-center justify-center"><img alt="HarianTani Logo" class="h-7 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxdf7Q2t2zAW5gL59eArXdK6p-05e0PPfEBpskJ-GyfKdXCsRYZ1T5vy8szmCTw_xrGG5vo154Va3IBWT-62A0rlB7wLaRZJn7UoXemOHNLQSoJTxwQo6R_RaMjs45gzrh4iWRQxJoK3Ski8bqTGzB1IvJFUixk8616XpIdB9WX3QfVT4u8JkyLuugpxCZPkL3NhrcnCfOafw35ymlM_FO05EV8qaz27SAjOhe8djL15SbVauNQ4YzdQ"></div><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-white tracking-tight font-bold leading-none">HarianTani</span><span class="font-label-sm text-label-sm text-[#cbffc2] leading-none mt-0.5 font-medium">Lahan</span></div></div><div class="flex items-center gap-2"><button aria-label="Notifikasi Operasional" class="relative w-11 h-11 flex items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/20 active:scale-95 transition-transform backdrop-blur-md"><span class="material-symbols-outlined text-[22px]">notifications</span><span class="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-[#ffdad6] ring-2 ring-[#2e7d32]"></span></button><button aria-label="Profil Pak Budi" class="w-11 h-11 flex items-center justify-center rounded-full bg-white/20 p-0.5 active:scale-95 transition-transform overflow-hidden ring-2 ring-white/30"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcY2f4Zp0UrYmxyZwCvnhMs8uiJVTH7tW7sCA3_0U1NNmRz9Dl2v3MM0yI8FhnMu2MvshGOpMIlKwrUnor2kVlnfGUbjmJos-rMFpjcIt_6xhote8Gb32LIjTLcGKdZx0xfCT2OGesouEOW5MFUJ-JBav-T07gfd9dniJb-KQBeyeFjiLQ_ahZ23ZqPQ9BrKrnDFohSeHBHHYZ0dX8vZdG7oJ18JFqJLy6cnChe75gMcXGy_Be-bY26g"></button></div></div></header><main class="flex flex-col relative w-full px-margin pt-24 pb-28 bg-surface"><div class="flex flex-col w-full gap-4 pb-6">
+<!-- Overview Summary Ribbon -->
+<div class="flex items-center justify-between bg-surface-container-lowest px-4 py-3 rounded-2xl shadow-sm">
+<div class="flex items-center gap-2.5">
+<div class="w-9 h-9 rounded-full bg-surface-tint-green text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">landscape</span>
+</div>
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Kapasitas Produksi</p>
+<p class="font-headline-sm text-headline-sm text-on-surface font-bold leading-tight">2.0 Hektar <span class="font-body-sm text-body-sm text-on-surface-variant font-normal">• 2 Petak Aktif</span></p>
+</div>
+</div>
+<div class="flex items-center gap-1 bg-surface-sage px-3 py-1.5 rounded-full">
+<span class="w-2 h-2 rounded-full bg-status-profit animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-primary font-bold">100% Subur</span>
+</div>
+</div>
+<!-- Header & Add Button -->
+<div class="flex items-center justify-between pt-1">
+<div>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface font-bold tracking-tight">Lahan Saya</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Kelola petak lahan dan siklus tumbuh tanaman</p>
+</div>
+<button class="flex items-center gap-1.5 bg-primary text-on-primary px-3.5 py-2.5 rounded-full font-label-md text-label-md shadow-sm active:scale-95 transition-transform" id="toggleFormBtn">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span class="">Tambah</span>
+</button>
+</div>
+<!-- Collapsible Add Land Form -->
+<div class="hidden bg-surface-container-lowest p-4 rounded-3xl shadow-sm transition-all duration-300" id="addLandForm">
+<div class="flex items-center justify-between pb-3">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-surface-sage-light text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]">add_location_alt</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">Tambah Petak Lahan</span>
+</div>
+<button class="w-7 h-7 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant active:scale-90" id="closeFormBtn">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+<div class="space-y-3">
+<div>
+<label class="block font-label-sm text-label-sm text-on-surface-variant mb-1 font-semibold">Nama Petak Lahan</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3.5 text-on-surface-variant text-[18px]">nature</span>
+<input class="w-full bg-surface-container-low pl-10 pr-3.5 py-2.5 rounded-xl font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:bg-surface-sage-light" placeholder="cth: Lahan Sawah Barat Blok B" type="text">
+</div>
+</div>
+<div>
+<label class="block font-label-sm text-label-sm text-on-surface-variant mb-1 font-semibold">Luas Area</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3.5 text-on-surface-variant text-[18px]">square_foot</span>
+<input class="w-full bg-surface-container-low pl-10 pr-3.5 py-2.5 rounded-xl font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:bg-surface-sage-light" placeholder="1.2 Hektar atau 800 m²" type="text">
+</div>
+</div>
+<div>
+<label class="block font-label-sm text-label-sm text-on-surface-variant mb-1.5 font-semibold">Komoditas Ditanam</label>
+<div class="flex flex-wrap gap-1.5">
+<button class="px-3 py-1.5 rounded-full bg-primary text-on-primary font-label-sm text-label-sm" type="button">Padi Ciherang</button>
+<button class="px-3 py-1.5 rounded-full bg-surface-container-low text-on-surface font-label-sm text-label-sm active:bg-surface-sage" type="button">Jagung Manis</button>
+<button class="px-3 py-1.5 rounded-full bg-surface-container-low text-on-surface font-label-sm text-label-sm active:bg-surface-sage" type="button">Cabai Rawit</button>
+<button class="px-3 py-1.5 rounded-full bg-surface-container-low text-primary font-label-sm text-label-sm flex items-center gap-0.5" type="button">
+<span class="material-symbols-outlined text-[14px]">add</span> Kustom
+          </button>
+</div>
+</div>
+<div class="pt-2">
+<button class="w-full bg-primary text-on-primary py-3 rounded-full font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 active:scale-98 transition-transform shadow-md" id="saveLandBtn">
+<span class="material-symbols-outlined text-[18px]">check_circle</span>
+          Simpan Data Lahan
+        </button>
+</div>
+</div>
+</div>
+<!-- Parcel Card 1: Padi Ciherang -->
+<div class="bg-surface-container-lowest rounded-3xl p-4 shadow-sm flex flex-col gap-3.5 relative overflow-hidden">
+<!-- Top badge ribbon & Title -->
+<div class="flex items-start justify-between">
+<div class="flex items-start gap-3">
+<div class="w-12 h-12 rounded-2xl bg-surface-tint-green flex items-center justify-center text-primary flex-shrink-0">
+<span class="material-symbols-outlined text-[26px]">grass</span>
+</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h2 class="font-headline-sm text-headline-sm text-on-surface font-bold">Lahan Sawah Barat</h2>
+<span class="w-2 h-2 rounded-full bg-status-profit"></span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant font-medium">Padi Ciherang • 1.2 Hektar</p>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="px-2.5 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-bold leading-none">
+          Vegetatif Akhir
+        </span>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1">Petak Utama #01</span>
+</div>
+</div>
+<!-- Growth Age & Plantation Banner -->
+<div class="bg-surface-container-low rounded-2xl p-3 flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-10 h-10 rounded-xl bg-surface-container-lowest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[22px]">calendar_today</span>
+</div>
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Umur Tanaman</p>
+<p class="font-currency-display text-currency-display text-primary leading-tight">64 Hari</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-label-sm text-label-sm text-on-surface-variant">Tgl Semai/Tanam</p>
+<p class="font-label-md text-label-md text-on-surface font-bold">9 Agustus 2026</p>
+<p class="font-label-sm text-label-sm text-status-profit font-semibold">Est. Panen: 26 Hari Lagi</p>
+</div>
+</div>
+<!-- Growth Timeline Progress (Route inspired) -->
+<div class="bg-surface-sage-light rounded-2xl p-3.5">
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-semibold tracking-wide uppercase">Siklus Pertumbuhan</span>
+<span class="font-label-sm text-label-sm text-primary font-bold">Tahap 3 dari 4</span>
+</div>
+<!-- Visual timeline nodes -->
+<div class="relative flex items-center justify-between px-2 pt-1">
+<div class="absolute left-4 right-4 h-1 bg-surface-container-highest top-3 -translate-y-1/2 z-0"></div>
+<div class="absolute left-4 w-2/3 h-1 bg-primary top-3 -translate-y-1/2 z-0"></div>
+<!-- Node 1: Semai -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-xs">
+<span class="material-symbols-outlined text-[13px]">check</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary font-bold mt-1">Semai</span>
+<span class="font-body-sm text-[10px] text-on-surface-variant leading-none">H-14</span>
+</div>
+<!-- Node 2: Tanam -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-xs">
+<span class="material-symbols-outlined text-[13px]">check</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary font-bold mt-1">Tanam</span>
+<span class="font-body-sm text-[10px] text-on-surface-variant leading-none">Hari 1</span>
+</div>
+<!-- Node 3: Pemupukan (Active) -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-7 h-7 rounded-full bg-surface-container-lowest text-primary flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">eco</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary font-bold mt-1">Pemupukan</span>
+<span class="font-body-sm text-[10px] text-primary font-bold leading-none">Aktif</span>
+</div>
+<!-- Node 4: Panen -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-6 h-6 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-[13px]">agriculture</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium mt-1">Panen</span>
+<span class="font-body-sm text-[10px] text-on-surface-variant leading-none">+26 hr</span>
+</div>
+</div>
+</div>
+<!-- Quick Stats Grid -->
+<div class="grid grid-cols-2 gap-2 pt-0.5">
+<div class="bg-surface-container-low p-2.5 rounded-xl flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">water_drop</span>
+<div class="min-w-0">
+<p class="font-label-sm text-label-sm text-on-surface-variant leading-tight">Kelembaban</p>
+<p class="font-label-md text-label-md text-on-surface font-bold leading-tight">82% (Optimal)</p>
+</div>
+</div>
+<div class="bg-surface-container-low p-2.5 rounded-xl flex items-center gap-2">
+<span class="material-symbols-outlined text-status-warning text-[20px]">schedule</span>
+<div class="min-w-0">
+<p class="font-label-sm text-label-sm text-on-surface-variant leading-tight">Jadwal Terdekat</p>
+<p class="font-label-md text-label-md text-on-surface font-bold leading-tight truncate">Besok 07:00</p>
+</div>
+</div>
+</div>
+<!-- Action Buttons -->
+<div class="flex items-center gap-2 pt-1">
+<button class="flex-1 bg-surface-sage hover:bg-surface-tint-green text-primary py-2.5 rounded-full font-label-md text-label-md font-bold text-center active:scale-95 transition-transform flex items-center justify-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">visibility</span>
+        Detail Petak
+      </button>
+<button class="flex-1 bg-primary text-on-primary py-2.5 rounded-full font-label-md text-label-md font-bold text-center active:scale-95 transition-transform flex items-center justify-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">edit_calendar</span>
+        Log Lapangan
+      </button>
+</div>
+</div>
+<!-- Parcel Card 2: Cabai Rawit Merah -->
+<div class="bg-surface-container-lowest rounded-3xl p-4 shadow-sm flex flex-col gap-3.5 relative overflow-hidden">
+<!-- Top badge ribbon & Title -->
+<div class="flex items-start justify-between">
+<div class="flex items-start gap-3">
+<div class="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center text-status-warning flex-shrink-0">
+<span class="material-symbols-outlined text-[26px]">yard</span>
+</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h2 class="font-headline-sm text-headline-sm text-on-surface font-bold">Kebun Lereng A</h2>
+<span class="w-2 h-2 rounded-full bg-status-profit"></span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant font-medium">Cabai Rawit Merah • 800 m²</p>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="px-2.5 py-1 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm font-bold leading-none">
+          Pembungaan
+        </span>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1">Petak Lereng #02</span>
+</div>
+</div>
+<!-- Growth Age & Plantation Banner -->
+<div class="bg-surface-container-low rounded-2xl p-3 flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-10 h-10 rounded-xl bg-surface-container-lowest flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined text-[22px]">nest_clock_farsight_analog</span>
+</div>
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Umur Tanaman</p>
+<p class="font-currency-display text-currency-display text-tertiary leading-tight">42 Hari</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-label-sm text-label-sm text-on-surface-variant">Tgl Tanam Bibit</p>
+<p class="font-label-md text-label-md text-on-surface font-bold">31 Agustus 2026</p>
+<p class="font-label-sm text-label-sm text-status-profit font-semibold">Est. Panen: 35 Hari Lagi</p>
+</div>
+</div>
+<!-- Growth Timeline Progress -->
+<div class="bg-surface-sage-light rounded-2xl p-3.5">
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-semibold tracking-wide uppercase">Siklus Pertumbuhan</span>
+<span class="font-label-sm text-label-sm text-tertiary font-bold">Tahap 3 dari 4</span>
+</div>
+<!-- Visual timeline nodes -->
+<div class="relative flex items-center justify-between px-2 pt-1">
+<div class="absolute left-4 right-4 h-1 bg-surface-container-highest top-3 -translate-y-1/2 z-0"></div>
+<div class="absolute left-4 w-2/3 h-1 bg-tertiary top-3 -translate-y-1/2 z-0"></div>
+<!-- Node 1: Tanam -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-6 h-6 rounded-full bg-tertiary text-on-tertiary flex items-center justify-center shadow-xs">
+<span class="material-symbols-outlined text-[13px]">check</span>
+</div>
+<span class="font-label-sm text-label-sm text-tertiary font-bold mt-1">Tanam</span>
+<span class="font-body-sm text-[10px] text-on-surface-variant leading-none">Hari 1</span>
+</div>
+<!-- Node 2: Vegetatif -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-6 h-6 rounded-full bg-tertiary text-on-tertiary flex items-center justify-center shadow-xs">
+<span class="material-symbols-outlined text-[13px]">check</span>
+</div>
+<span class="font-label-sm text-label-sm text-tertiary font-bold mt-1">Vegetatif</span>
+<span class="font-body-sm text-[10px] text-on-surface-variant leading-none">H-20</span>
+</div>
+<!-- Node 3: Pembungaan (Active) -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-7 h-7 rounded-full bg-surface-container-lowest text-tertiary flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">local_florist</span>
+</div>
+<span class="font-label-sm text-label-sm text-tertiary font-bold mt-1">Bunga</span>
+<span class="font-body-sm text-[10px] text-tertiary font-bold leading-none">Aktif</span>
+</div>
+<!-- Node 4: Panen -->
+<div class="relative z-10 flex flex-col items-center">
+<div class="w-6 h-6 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-[13px]">inventory_2</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium mt-1">Panen</span>
+<span class="font-body-sm text-[10px] text-on-surface-variant leading-none">+35 hr</span>
+</div>
+</div>
+</div>
+<!-- Quick Stats Grid -->
+<div class="grid grid-cols-2 gap-2 pt-0.5">
+<div class="bg-surface-container-low p-2.5 rounded-xl flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">psychiatry</span>
+<div class="min-w-0">
+<p class="font-label-sm text-label-sm text-on-surface-variant leading-tight">Kondisi</p>
+<p class="font-label-md text-label-md text-on-surface font-bold leading-tight">Subur Normal</p>
+</div>
+</div>
+<div class="bg-surface-container-low p-2.5 rounded-xl flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">history_toggle_off</span>
+<div class="min-w-0">
+<p class="font-label-sm text-label-sm text-on-surface-variant leading-tight">Panen Terakhir</p>
+<p class="font-label-md text-label-md text-on-surface font-bold leading-tight truncate">Musim Pertama</p>
+</div>
+</div>
+</div>
+<!-- Action Buttons -->
+<div class="flex items-center gap-2 pt-1">
+<button class="flex-1 bg-surface-sage hover:bg-surface-tint-green text-tertiary py-2.5 rounded-full font-label-md text-label-md font-bold text-center active:scale-95 transition-transform flex items-center justify-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">visibility</span>
+        Detail Petak
+      </button>
+<button class="flex-1 bg-tertiary text-on-tertiary py-2.5 rounded-full font-label-md text-label-md font-bold text-center active:scale-95 transition-transform flex items-center justify-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">edit_calendar</span>
+        Log Lapangan
+      </button>
+</div>
+</div>
+<!-- Telemetry Dark Card (Inspired by reference bottom stat pod) -->
+<div class="bg-surface-dark-card text-on-primary rounded-3xl p-4 shadow-md flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-11 h-11 rounded-2xl bg-surface-container-highest/10 flex items-center justify-center text-secondary-fixed">
+<span class="material-symbols-outlined text-[24px]">satellite_alt</span>
+</div>
+<div>
+<p class="font-label-sm text-label-sm text-surface-variant leading-tight">Sensor IoT Agrikultur</p>
+<p class="font-label-lg text-label-lg font-bold text-on-primary">Semua Sensor Aktif</p>
+<p class="font-body-sm text-body-sm text-secondary-fixed">Sinkronisasi 4 menit lalu</p>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-headline-md text-headline-md font-bold text-secondary-fixed">98%</span>
+<span class="font-label-sm text-label-sm text-surface-variant">Stabilitas Tanah</span>
+</div>
+</div>
+</div>
+<script>
+  // Simple micro-interactions for Add Land Form Toggle
+  const toggleBtn = document.getElementById('toggleFormBtn');
+  const closeBtn = document.getElementById('closeFormBtn');
+  const saveBtn = document.getElementById('saveLandBtn');
+  const addForm = document.getElementById('addLandForm');
+
+  if (toggleBtn && addForm) {
+    toggleBtn.addEventListener('click', () => {
+      addForm.classList.toggle('hidden');
+      if (!addForm.classList.contains('hidden')) {
+        addForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+  }
+
+  if (closeBtn && addForm) {
+    closeBtn.addEventListener('click', () => {
+      addForm.classList.add('hidden');
+    });
+  }
+
+  if (saveBtn && addForm) {
+    saveBtn.addEventListener('click', () => {
+      saveBtn.innerText = 'Menyimpan...';
+      setTimeout(() => {
+        saveBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">check_circle</span> Simpan Data Lahan';
+        addForm.classList.add('hidden');
+      }, 500);
+    });
+  }
+</script></main><nav class="fixed bottom-0 inset-x-0 z-50 pb-safe px-margin-sm mb-2 pointer-events-none"><div class="pointer-events-auto h-20 max-w-md mx-auto bg-[#1b5e20] backdrop-blur-2xl rounded-xl shadow-[0_12px_32px_rgba(10,40,15,0.35)] px-2 flex items-center justify-around"><a class="flex flex-col items-center justify-center min-w-[56px] h-14 rounded-full px-2 text-white/75 transition-all active:scale-95 hover:text-white" data-path="beranda" href="#"><span class="material-symbols-outlined text-[24px]">home</span><span class="font-label-sm text-label-sm mt-0.5">Beranda</span></a><a aria-current="page" class="flex flex-col items-center justify-center min-w-[56px] h-14 rounded-full px-2 transition-all active:scale-95 bg-[#a7f3d0] text-[#005312] font-bold shadow-sm" data-path="lahan" href="#"><span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">potted_plant</span><span class="font-label-sm text-label-sm mt-0.5 font-bold">Lahan</span></a><a class="flex flex-col items-center justify-center min-w-[56px] h-14 rounded-full px-2 text-white/75 transition-all active:scale-95 hover:text-white" data-path="jadwal" href="#"><span class="material-symbols-outlined text-[24px]">calendar_clock</span><span class="font-label-sm text-label-sm mt-0.5">Jadwal</span></a><a class="flex flex-col items-center justify-center min-w-[56px] h-14 rounded-full px-2 text-white/75 transition-all active:scale-95 hover:text-white" data-path="jurnal" href="#"><span class="material-symbols-outlined text-[24px]">edit_note</span><span class="font-label-sm text-label-sm mt-0.5">Jurnal</span></a><a class="flex flex-col items-center justify-center min-w-[56px] h-14 rounded-full px-2 text-white/75 transition-all active:scale-95 hover:text-white" data-path="panen" href="#"><span class="material-symbols-outlined text-[24px]">account_balance_wallet</span><span class="font-label-sm text-label-sm mt-0.5">Panen</span></a></div></nav>
+
+</body></html>
