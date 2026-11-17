@@ -153,6 +153,19 @@ export async function fetchWithTimeout(
     controller.abort();
   }, timeoutMs);
 
+  let externalAborted = false;
+  if (options?.signal) {
+    if (options.signal.aborted) {
+      externalAborted = true;
+      controller.abort();
+    } else {
+      options.signal.addEventListener('abort', () => {
+        externalAborted = true;
+        controller.abort();
+      });
+    }
+  }
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -160,6 +173,13 @@ export async function fetchWithTimeout(
     });
     return response;
   } catch (err: any) {
+    // Jika dibatalkan oleh signal eksternal (misal: component unmount / abort cleanup)
+    if (externalAborted || options?.signal?.aborted) {
+      const abortErr = new Error('Fetch request dibatalkan: Component unmounted');
+      abortErr.name = 'AbortError';
+      throw abortErr;
+    }
+
     // 1. Tangani Timeout Error (Slide 6)
     if (err.name === 'AbortError' || err.message?.toLowerCase().includes('aborted')) {
       throw new ApiError(
@@ -175,13 +195,16 @@ export async function fetchWithTimeout(
     if (
       errMessage.includes('network request failed') ||
       errMessage.includes('failed to fetch') ||
+      errMessage.includes('fetch failed') ||
       errMessage.includes('networkerror') ||
       errMessage.includes('internet') ||
       errMessage.includes('connection refused') ||
+      errMessage.includes('enotfound') ||
+      errMessage.includes('getaddrinfo') ||
       errMessage.includes('dns')
     ) {
       throw new ApiError(
-        'Tidak ada koneksi internet. Periksa koneksi data atau Wi-Fi Anda dan coba lagi.',
+        'Tidak ada koneksi internet atau server tidak dapat dijangkau. Periksa koneksi data atau Wi-Fi Anda.',
         0,
         null,
         'OFFLINE'

@@ -21,7 +21,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
 
 export default function JurnalScreen() {
-  const { jurnalList, lahanList, addJurnal, isLoading, error, apiStatus, refetchAll } = useAppContext();
+  const { jurnalList, lahanList, addJurnal, isLoading, error, apiStatus, statusCode, isSimulationActive, refetchAll } = useAppContext();
   const [isAdding, setIsAdding] = useState(false);
 
   const [catatan, setCatatan] = useState('');
@@ -85,7 +85,7 @@ export default function JurnalScreen() {
 
   const totalBiayaBulanIni = jurnalList.reduce((acc, curr) => acc + curr.biaya, 0);
 
-  if (isLoading && jurnalList.length === 0) {
+  if (isLoading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={ThemeColors.primary} />
@@ -94,8 +94,8 @@ export default function JurnalScreen() {
     );
   }
 
-  // Error / Offline / Timeout Full Screen State saat data belum ada (Slide 3, 5, 10, 11)
-  if (error && jurnalList.length === 0) {
+  // Error / Offline / Timeout Full Screen State (Tampil saat simulasi aktif atau jika data kosong dan terjadi error)
+  if (error && (isSimulationActive || jurnalList.length === 0)) {
     return (
       <ScrollView
         style={styles.container}
@@ -111,6 +111,7 @@ export default function JurnalScreen() {
       >
         <ErrorState
           type={apiStatus === 'offline' ? 'offline' : apiStatus === 'timeout' ? 'timeout' : 'error'}
+          statusCode={statusCode}
           message={error}
           onRetry={onRefresh}
           isRetrying={refreshing}
@@ -138,17 +139,6 @@ export default function JurnalScreen() {
           />
         }
       >
-        {/* Compact Error/Offline Banner saat update background gagal tapi data lokal tersedia */}
-        {error && jurnalList.length > 0 && (
-          <ErrorState
-            compact
-            type={apiStatus === 'offline' ? 'offline' : apiStatus === 'timeout' ? 'timeout' : 'error'}
-            message={error}
-            onRetry={onRefresh}
-            isRetrying={refreshing}
-            style={{ marginBottom: Spacing.sm }}
-          />
-        )}
 
         {/* Header Title & Intro */}
         <View style={styles.headerRow}>

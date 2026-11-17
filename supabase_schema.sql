@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS public.laporan_panen (
   jumlah NUMERIC NOT NULL DEFAULT 0,
   satuan TEXT NOT NULL DEFAULT 'Kg',
   harga_jual NUMERIC NOT NULL DEFAULT 0,
+  selesai BOOLEAN NOT NULL DEFAULT FALSE,
+  commodity TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

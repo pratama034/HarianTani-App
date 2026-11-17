@@ -53,17 +53,34 @@ export interface JurnalDTO {
  */
 export interface PanenDTO {
   id?: string | number;
-  id_lahan: string | number;
+  id_lahan?: string | number;
   tanggal: string; // Format: YYYY-MM-DD
   jumlah: number;
   satuan: string;
   harga_jual: number; // Nilai harga satuan penjualan
+  selesai?: boolean;
+  is_completed?: boolean;
+  commodity?: string;
   created_at?: string;
 }
 
 // ============================================================================
 // 2. Mobile Domain Models - REACT NATIVE APPLICATION (camelCase)
 // ============================================================================
+
+/**
+ * Spesifikasi Entitas Panen Harian (Spesifikasi Teknis Week 8: Task 01 - 03)
+ */
+export interface HarvestItem {
+  id: string;
+  commodity: string;
+  weightKg: number;
+  isCompleted: boolean;
+  date: string;
+  idLahan?: string;
+  satuan?: string;
+  hargaJual?: number;
+}
 
 /**
  * Model Petak Lahan untuk State dan Komponen UI Aplikasi Mobile.
@@ -112,6 +129,8 @@ export interface Panen {
   jumlah: number;
   satuan: string;
   hargaJual: number;
+  isCompleted: boolean;
+  commodity?: string;
   createdAt?: string;
 }
 

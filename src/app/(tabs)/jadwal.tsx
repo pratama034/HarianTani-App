@@ -29,6 +29,8 @@ export default function JadwalScreen() {
     isLoading,
     error,
     apiStatus,
+    statusCode,
+    isSimulationActive,
     refetchAll,
   } = useAppContext();
   const [filter, setFilter] = useState<FilterType>('Semua');
@@ -106,7 +108,7 @@ export default function JadwalScreen() {
     { day: 'Min', date: '18', active: false },
   ];
 
-  if (isLoading && jadwalList.length === 0) {
+  if (isLoading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={ThemeColors.primary} />
@@ -115,8 +117,8 @@ export default function JadwalScreen() {
     );
   }
 
-  // Error / Offline / Timeout Full Screen State saat data belum ada (Slide 3, 5, 10, 11)
-  if (error && jadwalList.length === 0) {
+  // Error / Offline / Timeout Full Screen State (Tampil saat simulasi aktif atau jika data kosong dan terjadi error)
+  if (error && (isSimulationActive || jadwalList.length === 0)) {
     return (
       <ScrollView
         style={styles.container}
@@ -132,6 +134,7 @@ export default function JadwalScreen() {
       >
         <ErrorState
           type={apiStatus === 'offline' ? 'offline' : apiStatus === 'timeout' ? 'timeout' : 'error'}
+          statusCode={statusCode}
           message={error}
           onRetry={onRefresh}
           isRetrying={refreshing}
@@ -154,17 +157,6 @@ export default function JadwalScreen() {
         />
       }
     >
-      {/* Compact Error/Offline Banner saat update background gagal tapi data lokal tersedia */}
-      {error && jadwalList.length > 0 && (
-        <ErrorState
-          compact
-          type={apiStatus === 'offline' ? 'offline' : apiStatus === 'timeout' ? 'timeout' : 'error'}
-          message={error}
-          onRetry={onRefresh}
-          isRetrying={refreshing}
-          style={{ marginBottom: Spacing.sm }}
-        />
-      )}
 
       {/* Top AI Smart Agronomy Dark Pod */}
       <DarkSummaryCard style={styles.summaryPod}>

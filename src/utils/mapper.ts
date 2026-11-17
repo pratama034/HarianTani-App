@@ -15,6 +15,7 @@ import {
   Jurnal,
   PanenDTO,
   Panen,
+  HarvestItem,
 } from '../types/api';
 
 // ============================================================================
@@ -155,6 +156,8 @@ export function mapPanenDTOtoModel(dto: PanenDTO): Panen {
     jumlah: typeof dto.jumlah === 'number' ? dto.jumlah : parseFloat(String(dto.jumlah)) || 0,
     satuan: dto.satuan || 'Kg',
     hargaJual: typeof dto.harga_jual === 'number' ? dto.harga_jual : parseFloat(String(dto.harga_jual)) || 0,
+    isCompleted: Boolean(dto.selesai ?? dto.is_completed),
+    commodity: dto.commodity,
     createdAt: dto.created_at,
   };
 }
@@ -171,6 +174,9 @@ export function mapModelToPanenDTO(
     jumlah: Number(model.jumlah) || 0,
     satuan: model.satuan.trim() || 'Kg',
     harga_jual: Number(model.hargaJual) || 0,
+    selesai: model.isCompleted ?? false,
+    is_completed: model.isCompleted ?? false,
+    commodity: model.commodity,
   };
 
   if (model.id) {
@@ -181,5 +187,37 @@ export function mapModelToPanenDTO(
   }
 
   return dto;
+}
+
+/**
+ * Mengonversi Panen Model ke HarvestItem (Sesuai Spesifikasi Teknis Week 8: Task 01 - 03)
+ */
+export function mapPanenToHarvestItem(panen: Panen, defaultCommodity = 'Hasil Panen'): HarvestItem {
+  return {
+    id: panen.id,
+    commodity: panen.commodity || defaultCommodity,
+    weightKg: panen.jumlah,
+    isCompleted: Boolean(panen.isCompleted),
+    date: panen.tanggal,
+    idLahan: panen.idLahan,
+    satuan: panen.satuan,
+    hargaJual: panen.hargaJual,
+  };
+}
+
+/**
+ * Mengonversi HarvestItem ke Panen Model
+ */
+export function mapHarvestItemToPanen(item: HarvestItem): Panen {
+  return {
+    id: item.id,
+    idLahan: item.idLahan || '1',
+    tanggal: item.date,
+    jumlah: item.weightKg,
+    satuan: item.satuan || 'Kg',
+    hargaJual: item.hargaJual || 12000,
+    isCompleted: Boolean(item.isCompleted),
+    commodity: item.commodity,
+  };
 }
 

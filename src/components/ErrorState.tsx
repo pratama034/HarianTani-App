@@ -10,10 +10,17 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeColors, Radius, Spacing, Shadows } from '../constants/theme';
 
-export type ErrorStateType = 'offline' | 'timeout' | 'error' | 'generic';
+export type ErrorStateType =
+  | 'offline'
+  | 'timeout'
+  | 'client_error'
+  | 'server_error'
+  | 'error'
+  | 'generic';
 
 export interface ErrorStateProps {
   type?: ErrorStateType;
+  statusCode?: number | null;
   title?: string;
   message?: string;
   onRetry?: () => void;
@@ -23,11 +30,12 @@ export interface ErrorStateProps {
 }
 
 /**
- * Komponen ErrorState: Visual feedback untuk kegagalan API, Timeout, dan Kondisi Offline.
- * Sesuai Slide 3, 5, 6, 7, 10, & 11 (Pekan 6: Error Handling & Offline).
+ * Komponen ErrorState: Visual feedback untuk kegagalan API (4xx/5xx), Timeout, dan Kondisi Offline.
+ * Sesuai Slide 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, & 14 (Pekan 6 / Sprint 05: Error Handling & Offline).
  */
 export function ErrorState({
   type = 'error',
+  statusCode,
   title,
   message,
   onRetry,
@@ -35,25 +43,58 @@ export function ErrorState({
   compact = false,
   style,
 }: ErrorStateProps) {
-  // Tentukan ikon, judul default, dan warna berdasarkan jenis kegagalan
+  // Tentukan kategori error secara otomatis berdasarkan statusCode jika tersedia
+  const resolvedType: ErrorStateType = (() => {
+    if (type !== 'error') return type;
+    if (statusCode === 408) return 'timeout';
+    if (statusCode && statusCode >= 400 && statusCode < 500) return 'client_error';
+    if (statusCode && statusCode >= 500) return 'server_error';
+    return type;
+  })();
+
   let defaultIcon: keyof typeof MaterialCommunityIcons.glyphMap = 'alert-circle-outline';
-  let defaultTitle = 'Gagal Memuat Data';
-  let defaultMessage = 'Terjadi kesalahan pada server. Silakan coba beberapa saat lagi.';
+  let defaultTitle = 'Gagal mengambil data.';
+  let defaultMessage = 'Terjadi kesalahan pada server. Silakan coba lagi.';
+  let badgeText = statusCode ? `HTTP ${statusCode} Error` : 'API Request Error';
   let iconBgColor = 'rgba(239, 68, 68, 0.12)';
   let iconColor = ThemeColors.error;
+  let badgeBgColor = 'rgba(239, 68, 68, 0.1)';
 
-  if (type === 'offline') {
+  if (resolvedType === 'offline') {
     defaultIcon = 'wifi-off';
-    defaultTitle = 'Tidak Ada Koneksi Internet';
-    defaultMessage = 'Periksa koneksi data seluler atau Wi-Fi Anda lalu coba lagi.';
+    defaultTitle = 'Tidak ada koneksi internet.';
+    defaultMessage = 'Periksa koneksi Anda dan coba lagi.';
+    badgeText = 'Network Error • Offline';
+    iconBgColor = 'rgba(239, 68, 68, 0.12)';
+    iconColor = ThemeColors.error;
+    badgeBgColor = 'rgba(239, 68, 68, 0.1)';
+  } else if (resolvedType === 'timeout') {
+    defaultIcon = 'clock-alert-outline';
+    defaultTitle = 'Waktu permintaan habis.';
+    defaultMessage = 'Server tidak merespons (timeout). Silakan coba lagi.';
+    badgeText = 'HTTP 408 • Request Timeout';
     iconBgColor = 'rgba(245, 158, 11, 0.14)';
     iconColor = ThemeColors.warning;
-  } else if (type === 'timeout') {
-    defaultIcon = 'timer-sand-empty';
-    defaultTitle = 'Waktu Permintaan Habis';
-    defaultMessage = 'Server membutuhkan waktu terlalu lama untuk merespons. Silakan coba kembali.';
+    badgeBgColor = 'rgba(245, 158, 11, 0.12)';
+  } else if (resolvedType === 'client_error') {
+    defaultIcon = 'alert-circle-outline';
+    defaultTitle = statusCode === 404 ? 'Data tidak ditemukan' : 'Permintaan tidak valid';
+    defaultMessage =
+      statusCode === 404
+        ? 'Data atau resource yang Anda cari tidak tersedia. (404 Not Found)'
+        : `Terjadi kesalahan permintaan dari aplikasi (${statusCode || '4xx'} Client Error).`;
+    badgeText = `HTTP ${statusCode || 400} • Client Error (4xx)`;
     iconBgColor = 'rgba(245, 158, 11, 0.14)';
     iconColor = ThemeColors.warning;
+    badgeBgColor = 'rgba(245, 158, 11, 0.12)';
+  } else if (resolvedType === 'server_error') {
+    defaultIcon = 'server-network-off';
+    defaultTitle = 'Terjadi kesalahan pada server.';
+    defaultMessage = `Server sedang mengalami gangguan. Silakan coba lagi nanti. (${statusCode || 500} Internal Server Error)`;
+    badgeText = `HTTP ${statusCode || 500} • Server Error (5xx)`;
+    iconBgColor = 'rgba(239, 68, 68, 0.12)';
+    iconColor = ThemeColors.error;
+    badgeBgColor = 'rgba(239, 68, 68, 0.1)';
   }
 
   const finalTitle = title || defaultTitle;
@@ -61,7 +102,12 @@ export function ErrorState({
 
   if (compact) {
     return (
-      <View style={[styles.compactContainer, style]}>
+      <View
+        style={[styles.compactContainer, style]}
+        accessible={true}
+        accessibilityRole="alert"
+        accessibilityLabel={`${finalTitle}. ${finalMessage}`}
+      >
         <View style={[styles.compactIconCircle, { backgroundColor: iconBgColor }]}>
           <MaterialCommunityIcons name={defaultIcon} size={20} color={iconColor} />
         </View>
@@ -77,13 +123,16 @@ export function ErrorState({
             onPress={onRetry}
             disabled={isRetrying}
             activeOpacity={0.8}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Coba Lagi"
           >
             {isRetrying ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <View style={styles.retryInnerRow}>
                 <MaterialCommunityIcons name="refresh" size={16} color="#FFFFFF" />
-                <Text style={styles.compactRetryText}>Coba</Text>
+                <Text style={styles.compactRetryText}>Coba Lagi</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -93,12 +142,27 @@ export function ErrorState({
   }
 
   return (
-    <View style={[styles.container, style]}>
-      <View style={[styles.iconCircle, { backgroundColor: iconBgColor }]}>
-        <MaterialCommunityIcons name={defaultIcon} size={42} color={iconColor} />
+    <View
+      style={[styles.container, style]}
+      accessible={true}
+      accessibilityRole="alert"
+      accessibilityLabel={`${finalTitle}. ${finalMessage}`}
+    >
+      {/* Status Classification Badge */}
+      <View style={[styles.badgePill, { backgroundColor: badgeBgColor }]}>
+        <Text style={[styles.badgeText, { color: iconColor }]}>{badgeText}</Text>
       </View>
-      <Text style={styles.title}>{finalTitle}</Text>
-      <Text style={styles.message}>{finalMessage}</Text>
+
+      <View style={[styles.iconCircle, { backgroundColor: iconBgColor }]}>
+        <MaterialCommunityIcons name={defaultIcon} size={44} color={iconColor} />
+      </View>
+
+      <Text style={styles.title}>{isRetrying ? 'Mencoba lagi...' : finalTitle}</Text>
+      <Text style={styles.message}>
+        {isRetrying
+          ? 'Menghubungkan ke server dan mengambil data terbaru.'
+          : finalMessage}
+      </Text>
 
       {onRetry && (
         <TouchableOpacity
@@ -106,11 +170,14 @@ export function ErrorState({
           onPress={onRetry}
           disabled={isRetrying}
           activeOpacity={0.85}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel="Tombol Coba Lagi"
         >
           {isRetrying ? (
             <View style={styles.buttonInner}>
               <ActivityIndicator size="small" color="#FFFFFF" />
-              <Text style={styles.retryButtonText}>Menghubungkan Ulang...</Text>
+              <Text style={styles.retryButtonText}>Mencoba lagi...</Text>
             </View>
           ) : (
             <View style={styles.buttonInner}>
@@ -128,25 +195,37 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.xl,
+    paddingVertical: Spacing.xl + 8,
     paddingHorizontal: Spacing.xl,
     backgroundColor: ThemeColors.surface,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
+    borderColor: 'rgba(239, 68, 68, 0.18)',
     marginVertical: Spacing.md,
     ...Shadows.card,
   },
+  badgePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    marginBottom: Spacing.md,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
   iconCircle: {
-    width: 80,
-    height: 80,
+    width: 84,
+    height: 84,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.md,
   },
   title: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '700',
     color: ThemeColors.text,
     textAlign: 'center',
@@ -156,29 +235,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: ThemeColors.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 21,
     marginBottom: Spacing.lg,
     maxWidth: 320,
   },
   retryButton: {
-    backgroundColor: ThemeColors.primary,
-    paddingVertical: Spacing.sm + 2,
-    paddingHorizontal: Spacing.xl,
+    backgroundColor: ThemeColors.error,
+    paddingVertical: Spacing.sm + 4,
+    paddingHorizontal: Spacing.xl + 8,
     borderRadius: Radius.full,
+    minWidth: 180,
+    alignItems: 'center',
     ...Shadows.button,
   },
   buttonDisabled: {
-    opacity: 0.65,
+    opacity: 0.7,
   },
   buttonInner: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
   },
   retryButtonText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
   // Compact Banner Styles
@@ -186,10 +268,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: Spacing.sm + 2,
-    backgroundColor: '#FFFBEB',
+    backgroundColor: '#FEF2F2',
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.3)',
+    borderColor: 'rgba(239, 68, 68, 0.25)',
     marginVertical: Spacing.xs,
   },
   compactIconCircle: {
@@ -207,15 +289,15 @@ const styles = StyleSheet.create({
   compactTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#92400E',
+    color: '#991B1B',
   },
   compactMessage: {
     fontSize: 12,
-    color: '#B45309',
+    color: '#B91C1C',
     marginTop: 1,
   },
   compactRetryButton: {
-    backgroundColor: ThemeColors.primary,
+    backgroundColor: ThemeColors.error,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: Radius.full,

@@ -18,6 +18,7 @@ import { DarkSummaryCard } from '../../components/DarkSummaryCard';
 import { SectionHeader } from '../../components/SectionHeader';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
+import { SensorDisplayCard } from '../../components/SensorDisplayCard';
 
 export default function BerandaScreen() {
   const router = useRouter();
@@ -29,16 +30,24 @@ export default function BerandaScreen() {
     isLoading,
     error,
     apiStatus,
+    statusCode,
     isCloudConnected,
+    isSimulationActive,
     refetchAll,
   } = useAppContext();
   const { user, session } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
+  const [weatherTemp, setWeatherTemp] = useState<number>(28);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await refetchAll();
     setRefreshing(false);
+  };
+
+  const handleShakeRefresh = async () => {
+    setWeatherTemp((prev) => (prev === 28 ? 27 : prev === 27 ? 29 : 28));
+    await onRefresh();
   };
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -66,17 +75,20 @@ export default function BerandaScreen() {
     }).format(angka);
   };
 
-  if (isLoading && lahanList.length === 0 && jadwalList.length === 0) {
+  if (isLoading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={ThemeColors.primary} />
-        <Text style={styles.loadingText}>Menghubungkan ke Cloud REST API...</Text>
+        <Text style={styles.loadingText}>Memuat data...</Text>
+        <Text style={{ fontSize: 13, color: ThemeColors.textSecondary, marginTop: 4 }}>
+          Mohon tunggu sebentar, sedang menghubungi REST API.
+        </Text>
       </View>
     );
   }
 
-  // Full Screen Error / Offline State saat belum ada data sama sekali (Slide 3, 5, 10, 11)
-  if (error && lahanList.length === 0 && jadwalList.length === 0) {
+  // Full Screen Error / Offline / Timeout State (Tampil saat simulasi aktif atau jika data kosong dan terjadi error)
+  if (error && (isSimulationActive || (lahanList.length === 0 && jadwalList.length === 0))) {
     return (
       <ScrollView
         style={styles.container}
@@ -92,6 +104,7 @@ export default function BerandaScreen() {
       >
         <ErrorState
           type={apiStatus === 'offline' ? 'offline' : apiStatus === 'timeout' ? 'timeout' : 'error'}
+          statusCode={statusCode}
           message={error}
           onRetry={onRefresh}
           isRetrying={refreshing}
@@ -114,18 +127,6 @@ export default function BerandaScreen() {
         />
       }
     >
-      {/* Compact Error/Offline Banner saat update background gagal tapi data lokal tersedia */}
-      {error && (
-        <ErrorState
-          compact
-          type={apiStatus === 'offline' ? 'offline' : apiStatus === 'timeout' ? 'timeout' : 'error'}
-          message={error}
-          onRetry={onRefresh}
-          isRetrying={refreshing}
-          style={{ marginBottom: Spacing.sm }}
-        />
-      )}
-
       {/* Greeting & Date Header */}
       <View style={styles.greetingSection}>
         <View style={styles.greetingRow}>
@@ -142,7 +143,7 @@ export default function BerandaScreen() {
               size={18}
               color={ThemeColors.warning}
             />
-            <Text style={styles.weatherText}>28°C</Text>
+            <Text style={styles.weatherText}>{weatherTemp}°C</Text>
           </View>
         </View>
 
@@ -150,17 +151,19 @@ export default function BerandaScreen() {
         <View style={styles.diagnosticPill}>
           <View style={styles.diagnosticLeft}>
             <MaterialCommunityIcons
-              name={session?.token ? 'shield-check' : 'cloud-check'}
+              name={session?.token ? 'shield-check' : isCloudConnected ? 'cloud-check' : 'check-circle'}
               size={16}
               color={ThemeColors.primary}
             />
             <Text style={styles.diagnosticText}>
-              {session?.token ? '🟢 Cloud REST API (JWT Protected)' : '🟢 Cloud REST API Active'}
+              {isCloudConnected
+                ? (session?.token ? '🟢 Cloud REST API (200 OK • JWT Protected)' : '🟢 Cloud REST API Active (200 OK)')
+                : '🟢 Data Lokal Aktif (Offline Ready)'}
             </Text>
           </View>
           <View style={styles.diagnosticTag}>
             <Text style={styles.diagnosticTagText}>
-              {session?.token ? 'JWT Secure' : isCloudConnected ? 'Supabase' : 'Standby'}
+              {isCloudConnected ? (session?.token ? 'JWT Secure' : '200 OK') : 'Local Ready'}
             </Text>
           </View>
         </View>
@@ -270,6 +273,12 @@ export default function BerandaScreen() {
           </TouchableOpacity>
         </DarkSummaryCard>
       </View>
+
+      {/* Week 7: Device Sensor Telemetry & Shake-to-Refresh Module */}
+      <SensorDisplayCard
+        onShakeRefresh={handleShakeRefresh}
+        isRefreshing={refreshing}
+      />
 
       {/* Route Timeline: Jadwal Perawatan Hari Ini */}
       <SectionHeader

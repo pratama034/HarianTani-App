@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Tabs, Redirect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { ThemeColors, Radius } from '../../constants/theme';
+import { ThemeColors, Radius, Spacing, Shadows } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
+import { useAppContext, SimulationScenario } from '../../context/AppContext';
 import {
   View,
   TouchableOpacity,
@@ -12,11 +13,14 @@ import {
   ActivityIndicator,
   StyleSheet,
   Text,
+  Modal,
 } from 'react-native';
 
 export default function TabLayout() {
   const { isAuthenticated, isLoading, logout, user } = useAuth();
+  const { apiStatus, statusCode, simulateApiCondition } = useAppContext();
   const router = useRouter();
+  const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -30,12 +34,9 @@ export default function TabLayout() {
     return <Redirect href="/(auth)/login" />;
   }
 
-  const handleCloudStatusPress = () => {
-    Alert.alert(
-      'Status Jaringan REST API & Keamanan Token',
-      '🟢 Cloud REST API Active (JWT Protected)\n\n• Token-Based Auth: JWT Bearer Token\n• Penyimpanan: Hardware SecureStore\n• Interceptor: Authorization Bearer terpasang otomatis\n• Sesi: Dilindungi dengan proteksi 401 auto-logout.',
-      [{ text: 'OK', style: 'default' }]
-    );
+  const handleSelectScenario = (scenario: SimulationScenario) => {
+    setIsDiagnosticOpen(false);
+    void simulateApiCondition(scenario);
   };
 
   const handleNotificationPress = () => {
@@ -76,6 +77,24 @@ export default function TabLayout() {
     }
   };
 
+  // Tentukan ikon & warna status jaringan secara dinamis (Slide 3, 5, 13, 14 Pekan 6)
+  let cloudIconName: keyof typeof MaterialCommunityIcons.glyphMap = 'cloud-check';
+  let cloudIconColor = '#A3E635';
+
+  if (apiStatus === 'offline') {
+    cloudIconName = 'wifi-off';
+    cloudIconColor = '#FCA5A5';
+  } else if (apiStatus === 'timeout') {
+    cloudIconName = 'clock-alert-outline';
+    cloudIconColor = '#FDE047';
+  } else if (apiStatus === 'error') {
+    cloudIconName = 'cloud-alert';
+    cloudIconColor = '#FCA5A5';
+  } else if (apiStatus === 'loading') {
+    cloudIconName = 'cloud-sync';
+    cloudIconColor = '#FDE047';
+  }
+
   const renderHeaderTitle = (screenSubtitle: string) => (
     <View style={styles.headerTitleContainer}>
       <View style={styles.headerLogoCircle}>
@@ -95,6 +114,148 @@ export default function TabLayout() {
   return (
     <>
       <StatusBar style="light" />
+
+      {/* Modal Panel Diagnostik & Penguji Kondisi API (Sprint 04 & Sprint 05 Demo) */}
+      <Modal
+        visible={isDiagnosticOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsDiagnosticOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.modalTitleRow}>
+                <MaterialCommunityIcons
+                  name="shield-sync"
+                  size={22}
+                  color={ThemeColors.primary}
+                />
+                <Text style={styles.modalTitle}>Status & Uji REST API</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsDiagnosticOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Tutup Panel"
+              >
+                <MaterialCommunityIcons
+                  name="close"
+                  size={22}
+                  color={ThemeColors.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.statusSummaryBox}>
+              <Text style={styles.statusSummaryLabel}>Status Saat Ini:</Text>
+              <Text style={styles.statusSummaryValue}>
+                {apiStatus === 'success' && '🟢 200 OK — Cloud REST API Active (JWT Protected)'}
+                {apiStatus === 'loading' && '🟡 Loading — Sedang menghubungi server...'}
+                {apiStatus === 'offline' && '🔴 Offline — Tidak ada koneksi internet'}
+                {apiStatus === 'timeout' && '🟠 408 Timeout — Waktu permintaan habis'}
+                {apiStatus === 'error' &&
+                  `🔴 HTTP ${statusCode || 500} Error — Kegagalan respons server`}
+              </Text>
+              <Text style={styles.statusSecurityNote}>
+                • Keamanan Pekan 5: JWT Bearer Token + SecureStore + 401 Auto-Logout{'\n'}
+                • Keandalan Pekan 6: 12s AbortController Timeout + Error/Offline Retry
+              </Text>
+            </View>
+
+            <Text style={styles.simulatorSectionTitle}>
+              Simulasi & Pengujian Skenario API (Sprint 05 Demo):
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.scenarioBtn,
+                apiStatus === 'success' && styles.scenarioBtnActive,
+              ]}
+              onPress={() => handleSelectScenario('normal')}
+            >
+              <MaterialCommunityIcons name="check-circle" size={18} color="#16A34A" />
+              <View style={styles.scenarioTextCol}>
+                <Text style={styles.scenarioBtnTitle}>1. Live API Normal (200 OK)</Text>
+                <Text style={styles.scenarioBtnDesc}>
+                  Ambil data asli dari Supabase PostgREST API
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.scenarioBtn,
+                apiStatus === 'offline' && styles.scenarioBtnActive,
+              ]}
+              onPress={() => handleSelectScenario('offline')}
+            >
+              <MaterialCommunityIcons name="wifi-off" size={18} color="#DC2626" />
+              <View style={styles.scenarioTextCol}>
+                <Text style={styles.scenarioBtnTitle}>2. Simulasi Offline (No Internet)</Text>
+                <Text style={styles.scenarioBtnDesc}>
+                  Uji tampilan tidak ada koneksi internet & tombol Coba Lagi
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.scenarioBtn,
+                apiStatus === 'timeout' && styles.scenarioBtnActive,
+              ]}
+              onPress={() => handleSelectScenario('timeout')}
+            >
+              <MaterialCommunityIcons name="clock-alert-outline" size={18} color="#D97706" />
+              <View style={styles.scenarioTextCol}>
+                <Text style={styles.scenarioBtnTitle}>3. Simulasi Request Timeout (408)</Text>
+                <Text style={styles.scenarioBtnDesc}>
+                  Uji kondisi ketika server terlalu lama merespons
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.scenarioBtn,
+                apiStatus === 'error' && statusCode === 404 && styles.scenarioBtnActive,
+              ]}
+              onPress={() => handleSelectScenario('http_404')}
+            >
+              <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#D97706" />
+              <View style={styles.scenarioTextCol}>
+                <Text style={styles.scenarioBtnTitle}>4. Simulasi Client Error (404 Not Found)</Text>
+                <Text style={styles.scenarioBtnDesc}>
+                  Uji respons HTTP 4xx ketika resource tidak ditemukan
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.scenarioBtn,
+                apiStatus === 'error' && statusCode === 500 && styles.scenarioBtnActive,
+              ]}
+              onPress={() => handleSelectScenario('http_500')}
+            >
+              <MaterialCommunityIcons name="server-network-off" size={18} color="#DC2626" />
+              <View style={styles.scenarioTextCol}>
+                <Text style={styles.scenarioBtnTitle}>5. Simulasi Server Error (500 Internal)</Text>
+                <Text style={styles.scenarioBtnDesc}>
+                  Uji respons HTTP 5xx ketika server mengalami gangguan
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.closeModalBtn}
+              onPress={() => setIsDiagnosticOpen(false)}
+            >
+              <Text style={styles.closeModalBtnText}>Tutup Panel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: ThemeColors.tabBarActive,
@@ -108,15 +269,15 @@ export default function TabLayout() {
             <View style={styles.headerRightContainer}>
               <TouchableOpacity
                 style={styles.headerCloudButton}
-                onPress={handleCloudStatusPress}
+                onPress={() => setIsDiagnosticOpen(true)}
                 accessibilityRole="button"
-                accessibilityLabel="Status REST API"
+                accessibilityLabel="Status dan Simulasi REST API"
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <MaterialCommunityIcons
-                  name="cloud-check"
+                  name={cloudIconName}
                   size={19}
-                  color="#A3E635"
+                  color={cloudIconColor}
                 />
               </TouchableOpacity>
 
@@ -162,7 +323,7 @@ export default function TabLayout() {
                 <MaterialCommunityIcons
                   name={focused ? 'home' : 'home-outline'}
                   size={24}
-                  color={focused ? ThemeColors.tabBarActive : color}
+                  color={focused ? ThemeColors.tabBarActive : (typeof color === 'string' ? color : ThemeColors.tabBarInactive)}
                 />
               </View>
             ),
@@ -178,7 +339,7 @@ export default function TabLayout() {
                 <MaterialCommunityIcons
                   name={focused ? 'sprout' : 'sprout-outline'}
                   size={24}
-                  color={focused ? ThemeColors.tabBarActive : color}
+                  color={focused ? ThemeColors.tabBarActive : (typeof color === 'string' ? color : ThemeColors.tabBarInactive)}
                 />
               </View>
             ),
@@ -194,7 +355,7 @@ export default function TabLayout() {
                 <MaterialCommunityIcons
                   name={focused ? 'calendar-clock' : 'calendar-clock-outline'}
                   size={24}
-                  color={focused ? ThemeColors.tabBarActive : color}
+                  color={focused ? ThemeColors.tabBarActive : (typeof color === 'string' ? color : ThemeColors.tabBarInactive)}
                 />
               </View>
             ),
@@ -210,7 +371,7 @@ export default function TabLayout() {
                 <MaterialCommunityIcons
                   name={focused ? 'notebook-edit' : 'notebook-edit-outline'}
                   size={24}
-                  color={focused ? ThemeColors.tabBarActive : color}
+                  color={focused ? ThemeColors.tabBarActive : (typeof color === 'string' ? color : ThemeColors.tabBarInactive)}
                 />
               </View>
             ),
@@ -226,7 +387,7 @@ export default function TabLayout() {
                 <MaterialCommunityIcons
                   name={focused ? 'basket' : 'basket-outline'}
                   size={24}
-                  color={focused ? ThemeColors.tabBarActive : color}
+                  color={focused ? ThemeColors.tabBarActive : (typeof color === 'string' ? color : ThemeColors.tabBarInactive)}
                 />
               </View>
             ),
@@ -359,5 +520,109 @@ const styles = StyleSheet.create({
   },
   iconWrapperActive: {
     backgroundColor: ThemeColors.tabBarActivePill,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.md,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: ThemeColors.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    ...Shadows.card,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  modalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: ThemeColors.text,
+  },
+  statusSummaryBox: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: Radius.md,
+    padding: Spacing.sm + 2,
+    borderWidth: 1,
+    borderColor: 'rgba(22, 163, 74, 0.25)',
+    marginBottom: Spacing.md,
+  },
+  statusSummaryLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: ThemeColors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  statusSummaryValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: ThemeColors.text,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  statusSecurityNote: {
+    fontSize: 11.5,
+    color: ThemeColors.textSecondary,
+    lineHeight: 17,
+  },
+  simulatorSectionTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: ThemeColors.text,
+    marginBottom: Spacing.xs,
+  },
+  scenarioBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    backgroundColor: '#FFFFFF',
+    marginBottom: 8,
+    gap: 10,
+  },
+  scenarioBtnActive: {
+    borderColor: ThemeColors.primary,
+    backgroundColor: '#F0FDF4',
+  },
+  scenarioTextCol: {
+    flex: 1,
+  },
+  scenarioBtnTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: ThemeColors.text,
+  },
+  scenarioBtnDesc: {
+    fontSize: 11.5,
+    color: ThemeColors.textSecondary,
+    marginTop: 1,
+  },
+  closeModalBtn: {
+    marginTop: Spacing.xs,
+    backgroundColor: ThemeColors.primary,
+    paddingVertical: 11,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+  },
+  closeModalBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

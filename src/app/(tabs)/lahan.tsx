@@ -18,7 +18,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
 
 export default function LahanScreen() {
-  const { lahanList, addLahan, isLoading, error, apiStatus, refetchAll } = useAppContext();
+  const { lahanList, addLahan, isLoading, error, apiStatus, statusCode, isSimulationActive, refetchAll } = useAppContext();
   const [isAdding, setIsAdding] = useState(false);
   const [nama, setNama] = useState('');
   const [luas, setLuas] = useState('');
@@ -87,7 +87,7 @@ export default function LahanScreen() {
     }
   };
 
-  if (isLoading && lahanList.length === 0) {
+  if (isLoading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={ThemeColors.primary} />
@@ -96,8 +96,8 @@ export default function LahanScreen() {
     );
   }
 
-  // Error / Offline / Timeout Full Screen State saat data belum ada (Slide 3, 5, 10, 11)
-  if (error && lahanList.length === 0) {
+  // Error / Offline / Timeout Full Screen State (Tampil saat simulasi aktif atau jika data kosong dan terjadi error)
+  if (error && (isSimulationActive || lahanList.length === 0)) {
     return (
       <ScrollView
         style={styles.container}
@@ -113,6 +113,7 @@ export default function LahanScreen() {
       >
         <ErrorState
           type={apiStatus === 'offline' ? 'offline' : apiStatus === 'timeout' ? 'timeout' : 'error'}
+          statusCode={statusCode}
           message={error}
           onRetry={onRefresh}
           isRetrying={refreshing}
@@ -135,17 +136,6 @@ export default function LahanScreen() {
         />
       }
     >
-      {/* Compact Error/Offline Banner saat update background gagal tapi data lokal tersedia */}
-      {error && lahanList.length > 0 && (
-        <ErrorState
-          compact
-          type={apiStatus === 'offline' ? 'offline' : apiStatus === 'timeout' ? 'timeout' : 'error'}
-          message={error}
-          onRetry={onRefresh}
-          isRetrying={refreshing}
-          style={{ marginBottom: Spacing.sm }}
-        />
-      )}
 
       {/* Overview Summary Ribbon */}
       <View style={styles.summaryRibbon}>
