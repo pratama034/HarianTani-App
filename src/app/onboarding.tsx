@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeColors, Radius, Spacing, Shadows } from '../constants/theme';
 import { AppCard } from '../components/AppCard';
 import { DarkSummaryCard } from '../components/DarkSummaryCard';
@@ -18,6 +19,7 @@ import { setCompletedOnboarding } from '../services/authStorage';
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const handleFinishOnboarding = async (targetRoute: '/(auth)/login' | '/(auth)/register') => {
     await setCompletedOnboarding();
@@ -27,7 +29,13 @@ export default function OnboardingScreen() {
   return (
     <View style={styles.screenContainer}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(insets.top, 20) + 10,
+            paddingBottom: Math.max(insets.bottom, 16) + 24,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Top Header & Brand */}
@@ -463,6 +471,8 @@ const styles = StyleSheet.create({
   heroCapsuleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: 6,
   },
   heroCapsuleIcon: {
     width: 28,
@@ -493,6 +503,8 @@ const styles = StyleSheet.create({
   darkPodLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
   },
   darkPodIcon: {
     width: 32,

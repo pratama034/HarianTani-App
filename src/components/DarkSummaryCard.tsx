@@ -14,16 +14,16 @@ export function DarkSummaryCard({ style, children, ...props }: DarkSummaryCardPr
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: ThemeColors.surfaceDarkCard, // #1A221C
-    borderRadius: Radius.xxl, // 28px
-    padding: Spacing.md,
+    backgroundColor: ThemeColors.surfaceDarkCard, // #00442F Deep Pine-Emerald
+    borderRadius: Radius.lg, // 16px
+    padding: Spacing.lg - 4,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    shadowColor: '#0A180E',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 5,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    shadowColor: '#002115',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 3,
     overflow: 'hidden',
   },
 });

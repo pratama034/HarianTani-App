@@ -8,7 +8,7 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { ThemeColors, Radius, Spacing } from '../constants/theme';
+import { ThemeColors, Radius, Spacing, Shadows } from '../constants/theme';
 
 export interface FormInputProps extends TextInputProps {
   label?: string;
@@ -76,38 +76,39 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   label: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: ThemeColors.text,
-    marginBottom: Spacing.xs + 2,
+    marginBottom: 6,
   },
   inputContainer: {
-    height: 52,
+    height: 48, // 48px per DESIGN.md
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: ThemeColors.surfaceLow,
-    borderRadius: Radius.md, // 16px
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.md, // 12px
     borderWidth: 1,
     borderColor: ThemeColors.border,
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: 14,
+    ...Shadows.subtle,
   },
   focusedContainer: {
-    borderColor: ThemeColors.primary,
-    backgroundColor: '#FFFFFF',
+    borderColor: ThemeColors.primaryContainer,
+    backgroundColor: ThemeColors.surfaceLow,
     borderWidth: 1.5,
   },
   errorContainer: {
     borderColor: ThemeColors.loss,
-    backgroundColor: '#FFF8F8',
+    backgroundColor: '#FEF2F2',
   },
   input: {
     flex: 1,
     height: '100%',
-    fontSize: 15,
+    fontSize: 14,
     color: ThemeColors.text,
   },
   leftIconContainer: {
-    marginRight: Spacing.sm + 2,
+    marginRight: 10,
   },
   rightElementContainer: {
     marginLeft: Spacing.sm,
@@ -120,7 +121,7 @@ const styles = StyleSheet.create({
   },
   hintText: {
     fontSize: 12,
-    color: ThemeColors.textMuted,
+    color: ThemeColors.textSecondary,
     marginTop: 4,
   },
 });

@@ -1,65 +1,76 @@
-import { Platform, TextStyle, ViewStyle } from 'react-native';
+import { Dimensions, Platform, TextStyle, ViewStyle } from 'react-native';
 
+/**
+ * Sistem Desain: Modern Agritech Precision (Google Stitch v3)
+ * Memadukan ketajaman struktur modern dengan kejelasan organik untuk lapangan pertanian.
+ */
 export const ThemeColors = {
-  // Brand Greens
-  primary: '#2E7D32',             // Primary green
-  primaryDark: '#1B5E20',         // Deep forest green
-  primaryLight: '#4CAF50',        // Fresh green accent
-  primaryContainer: '#2E7D32',
+  // Brand Pine-Emerald & Botanical Mint
+  primary: '#135D43',             // Primary container / main action green (#135D43)
+  primaryDark: '#00442F',         // Deep pine-emerald (#00442F)
+  primaryLight: '#006C49',        // Secondary botanical emerald (#006C49)
+  primaryContainer: '#135D43',
   onPrimary: '#FFFFFF',
-  primaryFixed: '#A3F69C',
-  primaryFixedDim: '#88D982',
+  onPrimaryContainer: '#8ED4B2',
+  primaryFixed: '#ABF1CF',
+  primaryFixedDim: '#90D5B4',
+  onPrimaryFixed: '#002115',
+  onPrimaryFixedVariant: '#005139',
 
   // Secondary & Accents
-  secondary: '#006E1C',
-  secondaryFixed: '#94F990',
-  secondaryFixedDim: '#78DC77',
-  secondaryContainer: '#91F78E',
-  onSecondaryContainer: '#00731E',
-  tertiary: '#1F6223',
-  tertiaryContainer: '#3A7B39',
+  secondary: '#006C49',
+  onSecondary: '#FFFFFF',
+  secondaryFixed: '#6FFBBE',
+  secondaryFixedDim: '#4EDEA3',
+  secondaryContainer: '#6CF8BB',
+  onSecondaryContainer: '#00714D',
+  onSecondaryFixed: '#002113',
+  onSecondaryFixedVariant: '#005236',
+  tertiary: '#353C42',
+  tertiaryContainer: '#4C5359',
 
-  // Navigation & Shell (Modern Redesign v2)
-  headerBackground: '#2E7D32',
+  // Navigation & Shell (Modern Clean Dark Green Bars)
+  headerBackground: '#0E3E2D',
   onHeader: '#FFFFFF',
   onHeaderSubtitle: 'rgba(255, 255, 255, 0.85)',
-  tabBarBackground: '#2E7D32',
-  tabBarActive: '#94F990',
-  tabBarInactive: 'rgba(255, 255, 255, 0.72)',
-  tabBarActivePill: 'rgba(255, 255, 255, 0.22)',
+  tabBarBackground: '#0E3E2D',
+  tabBarActive: '#ABF1CF',
+  tabBarInactive: 'rgba(255, 255, 255, 0.70)',
+  tabBarActivePill: '#ABF1CF',
+  onTabBarActivePill: '#005139',
 
-  // Sage Surfaces & Canvas
-  background: '#EBF3EC',          // Soft airy sage canvas
-  backgroundLight: '#F1F8E9',     // Light sage tint
-  surfaceSageLight: '#F1F8E9',    // Surface sage light
+  // Surfaces & Daylight Canvas (Modern Agritech Precision)
+  background: '#F8FAFC',          // Clean daylight calm canvas
+  backgroundLight: '#FFFFFF',
+  surfaceSageLight: '#ECFDF5',    // Emerald-50 soft botanical tint
   surface: '#FFFFFF',             // Pure white card
-  surfaceLow: '#F0F5EE',          // Low elevation container
-  surfaceContainer: '#EBEFE9',
-  surfaceHigh: '#E5E9E3',
-  surfaceHighest: '#DFE4DD',
-  surfaceTintGreen: '#E8F5E9',    // Soft pastel green container
-  surfaceDarkCard: '#1A221C',     // Obsidian-forest dark summary card
+  surfaceLow: '#F1F5F9',
+  surfaceContainer: '#F8FAFC',
+  surfaceHigh: '#E2E8F0',
+  surfaceHighest: '#CBD5E1',
+  surfaceTintGreen: '#D1FAE5',
+  surfaceDarkCard: '#0F172A',     // Slate gelap pekat
 
-  // Text & Content
-  text: '#181D19',                // On-surface primary text
-  textSecondary: '#40493D',       // On-surface-variant secondary text
-  textMuted: '#707A6C',           // Subtle outline text
+  // Text & Content - Hierarki Tenang
+  text: '#0F172A',                // Judul utama gelap pekat
+  textSecondary: '#64748B',       // Teks sekunder abu-abu redup
+  textMuted: '#94A3B8',           // Muted outline / placeholder
   onDark: '#FFFFFF',
-  onDarkSecondary: '#DFE4DD',
+  onDarkSecondary: '#94A3B8',
 
   // Outlines & Borders
-  border: '#D8E5DA',              // Subtle tactile border
-  borderLight: '#EBF3EC',
-  outlineVariant: '#BFCABA',
+  border: '#E2E8F0',              // Crisp 1px structural slate border
+  borderLight: '#F1F5F9',
+  outlineVariant: '#CBD5E1',
 
   // Status & Financial Semantics
-  profit: '#388E3C',              // Completed / profit / income
-  success: '#388E3C',
-  loss: '#D32F2F',                // Cost / expense / error
-  error: '#D32F2F',
+  profit: '#006C49',              // Completed / profit / optimal
+  success: '#10B981',
+  loss: '#BA1A1A',                // Cost / expense / error
+  error: '#BA1A1A',
   errorContainer: '#FFDAD6',
   onErrorContainer: '#93000A',
-  warning: '#F57C00',             // Alert / pending / warning
+  warning: '#D97706',             // Alert / pending / draft
 };
 
 export const Spacing = {
@@ -74,47 +85,48 @@ export const Spacing = {
 
 export const Radius = {
   sm: 8,
-  md: 16,
-  lg: 20,
-  xl: 24,
-  xxl: 28,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
   full: 9999,
 };
 
 export const Typography = {
-  // Font Families with robust fallbacks
   fontDisplay: Platform.select({
-    ios: 'Space Grotesk',
-    android: 'sans-serif-medium',
-    default: 'Space Grotesk, sans-serif',
-  }),
-  fontBody: Platform.select({
     ios: 'Plus Jakarta Sans',
-    android: 'sans-serif',
+    android: 'sans-serif-medium',
     default: 'Plus Jakarta Sans, sans-serif',
   }),
+  fontBody: Platform.select({
+    ios: 'Inter',
+    android: 'sans-serif',
+    default: 'Inter, sans-serif',
+  }),
 
-  // Text Styles
   displayLg: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700' as TextStyle['fontWeight'],
-    lineHeight: 40,
+    lineHeight: 36,
+    letterSpacing: -0.5,
     color: ThemeColors.text,
   },
   headlineLg: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700' as TextStyle['fontWeight'],
-    lineHeight: 32,
+    lineHeight: 30,
+    letterSpacing: -0.3,
     color: ThemeColors.text,
   },
   headlineMd: {
     fontSize: 20,
     fontWeight: '600' as TextStyle['fontWeight'],
     lineHeight: 28,
+    letterSpacing: -0.2,
     color: ThemeColors.text,
   },
   headlineSm: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600' as TextStyle['fontWeight'],
     lineHeight: 24,
     color: ThemeColors.text,
@@ -138,22 +150,22 @@ export const Typography = {
     color: ThemeColors.textSecondary,
   },
   labelLg: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600' as TextStyle['fontWeight'],
     lineHeight: 20,
     color: ThemeColors.text,
   },
   labelMd: {
-    fontSize: 13,
-    fontWeight: '600' as TextStyle['fontWeight'],
-    lineHeight: 18,
+    fontSize: 12,
+    fontWeight: '500' as TextStyle['fontWeight'],
+    lineHeight: 16,
     color: ThemeColors.text,
   },
   labelSm: {
     fontSize: 11,
-    fontWeight: '700' as TextStyle['fontWeight'],
-    lineHeight: 16,
-    letterSpacing: 0.5,
+    fontWeight: '600' as TextStyle['fontWeight'],
+    lineHeight: 14,
+    letterSpacing: 0.4,
   },
   currencyDisplay: {
     fontSize: 22,
@@ -165,24 +177,36 @@ export const Typography = {
 
 export const Shadows = {
   card: {
-    shadowColor: '#1E3C23',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    elevation: 0,
+    shadowOpacity: 0,
   } as ViewStyle,
   button: {
-    shadowColor: '#2E7D32',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 14,
-    elevation: 4,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   } as ViewStyle,
   subtle: {
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    elevation: 0,
+    shadowOpacity: 0,
   } as ViewStyle,
 };
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+export const Layout = {
+  window: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+  },
+  isSmallDevice: SCREEN_WIDTH < 375,
+  isMediumDevice: SCREEN_WIDTH >= 375 && SCREEN_WIDTH < 414,
+  isLargeDevice: SCREEN_WIDTH >= 414,
+  maxContentWidth: 480,
+};
+

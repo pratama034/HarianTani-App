@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeColors, Radius, Spacing } from '../constants/theme';
 
 export interface AppHeaderProps {
@@ -30,6 +31,7 @@ export function AppHeader({
   variant = 'green',
 }: AppHeaderProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const isGreen = variant === 'green';
 
   const handleBack = () => {
@@ -41,7 +43,14 @@ export function AppHeader({
   };
 
   return (
-    <View style={[styles.header, isGreen ? styles.headerGreen : styles.headerLight, style]}>
+    <View
+      style={[
+        styles.header,
+        isGreen ? styles.headerGreen : styles.headerLight,
+        insets.top > 0 && { paddingTop: insets.top + Spacing.sm },
+        style,
+      ]}
+    >
       <View style={styles.left}>
         {showBack ? (
           <TouchableOpacity

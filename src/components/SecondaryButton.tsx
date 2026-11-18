@@ -58,17 +58,19 @@ export function SecondaryButton({
 const styles = StyleSheet.create({
   button: {
     height: 48,
-    borderRadius: Radius.full,
+    borderRadius: Radius.md, // 12px
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.md,
   },
   tinted: {
-    backgroundColor: ThemeColors.surfaceTintGreen,
+    backgroundColor: ThemeColors.surfaceLow,
+    borderWidth: 1,
+    borderColor: ThemeColors.border,
   },
   outlined: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
     borderColor: ThemeColors.border,
   },
   content: {
@@ -78,13 +80,13 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   tintedText: {
     color: ThemeColors.primary,
   },
   outlinedText: {
-    color: ThemeColors.textSecondary,
+    color: ThemeColors.text,
   },
   iconLeft: {
     marginRight: Spacing.sm,

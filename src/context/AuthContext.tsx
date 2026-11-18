@@ -5,6 +5,7 @@ import {
   getSession,
   saveSession,
   clearSession,
+  clearCache as clearStorageCache,
   registerLocalUser,
   verifyLocalCredentials,
   isSecureStoreSupported,
@@ -14,6 +15,7 @@ import {
   apiRegister,
   apiLogout,
   setAuthToken,
+  clearApiCache,
   setOnUnauthorized,
   isSupabaseConfigured,
 } from '../services/api';
@@ -27,6 +29,7 @@ type AuthContextType = {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<{ success: boolean; error?: string }>;
+  clearCache: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -42,8 +45,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Sesuai Slide 12 & 14: Handler otomatis saat server merespons 401 Unauthorized
     setOnUnauthorized(() => {
       console.warn('[AuthContext] 401 Unauthorized diterima. Mengakhiri sesi secara aman...');
-      setAuthToken(null);
+      clearApiCache();
       void clearSession();
+      void clearStorageCache();
       if (isMounted) {
         setSession(null);
       }
@@ -118,18 +122,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch (err: any) {
         console.warn('[AuthContext] Cloud login gagal:', err.message);
 
-        // Jika kredensial akun demo pak budi digunakan, izinkan fallback lokal untuk kemudahan presentasi offline
-        const localCheck = await verifyLocalCredentials(trimmedEmail, password);
-        if (localCheck.success && localCheck.session) {
-          await saveSession(localCheck.session);
-          setAuthToken(localCheck.session.token);
-          setSession(localCheck.session);
-          return { success: true };
+        // Coba verifikasi fallback ke akun lokal terdaftar sebelum memutuskan login gagal
+        try {
+          const localFallback = await verifyLocalCredentials(trimmedEmail, password);
+          if (localFallback.success && localFallback.session) {
+            await saveSession(localFallback.session);
+            setAuthToken(localFallback.session.token);
+            setSession(localFallback.session);
+            return { success: true };
+          }
+        } catch {
+          // fallback silent
         }
+
+        // Format pesan error yang ramah pengguna jika akun tidak ditemukan atau kredensial salah
+        const is404OrNotFound =
+          err?.status === 404 ||
+          err?.status === 400 ||
+          (err?.message && (err.message.includes('404') || err.message.includes('not found') || err.message.includes('invalid_credentials')));
+
+        const errorMsg = is404OrNotFound
+          ? 'Email atau kata sandi tidak cocok. Silakan periksa kembali atau daftar akun baru jika belum terdaftar.'
+          : err?.message || 'Gagal masuk. Silakan periksa koneksi dan coba lagi.';
 
         return {
           success: false,
-          error: err.message || 'Email atau kata sandi tidak valid pada server.',
+          error: errorMsg,
         };
       }
     }
@@ -138,7 +156,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const result = await verifyLocalCredentials(trimmedEmail, password);
       if (!result.success || !result.session) {
-        return { success: false, error: result.error || 'Autentikasi gagal.' };
+        return { success: false, error: result.error || 'Email atau kata sandi tidak valid.' };
       }
 
       await saveSession(result.session);
@@ -189,7 +207,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   /**
    * Logout dan pembersihan session (Task 03 - Slide 12)
-   * Menghapus token dari SecureStore, server, dan mereset authentication state.
+   * Menghapus token dari SecureStore, server, memori API, dan membersihkan AsyncStorage secara menyeluruh.
    */
   const logout = async (): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -197,18 +215,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (isSupabaseConfigured() && currentToken) {
         await apiLogout(currentToken);
       }
-      setAuthToken(null);
+      clearApiCache();
       const cleared = await clearSession();
+      await clearStorageCache();
       if (!cleared) {
         return { success: false, error: 'Gagal membersihkan sesi dari penyimpanan perangkat.' };
       }
       setSession(null);
       return { success: true };
     } catch {
-      setAuthToken(null);
+      clearApiCache();
+      await clearStorageCache();
       setSession(null);
       return { success: true };
     }
+  };
+
+  /**
+   * Membersihkan seluruh data cache lokal dan token memori
+   */
+  const clearCache = async (): Promise<void> => {
+    clearApiCache();
+    await clearStorageCache();
   };
 
   const value: AuthContextType = {
@@ -220,6 +248,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     login,
     register,
     logout,
+    clearCache,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

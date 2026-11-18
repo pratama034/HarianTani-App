@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Vibration, Platform, type EventSubscription as Subscription } from 'react-native';
+import {
+  Vibration,
+  Platform,
+  AppState,
+  type AppStateStatus,
+  type EventSubscription as Subscription,
+} from 'react-native';
 import { Accelerometer } from 'expo-sensors';
 
 export interface SensorData {
@@ -38,10 +44,18 @@ export const useAccelerometer = (options?: UseAccelerometerOptions) => {
   const lastShakeTime = useRef<number>(0);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onShakeRef = useRef<(() => void) | undefined>(options?.onShake);
+  const intervalRef = useRef<number>(
+    options?.updateIntervalMs ?? SENSOR_UPDATE_INTERVAL_MS
+  );
 
   useEffect(() => {
     onShakeRef.current = options?.onShake;
   }, [options?.onShake]);
+
+  useEffect(() => {
+    intervalRef.current =
+      options?.updateIntervalMs ?? SENSOR_UPDATE_INTERVAL_MS;
+  }, [options?.updateIntervalMs]);
 
   /**
    * Evaluasi magnitudo percepatan total dan deteksi goncangan (Task 03)
@@ -86,30 +100,44 @@ export const useAccelerometer = (options?: UseAccelerometerOptions) => {
     }
   }, []);
 
+  const subRef = useRef<Subscription | null>(null);
+
   /**
    * Task 01: Membuka langganan (subscription) ke Accelerometer dengan interval 100ms
    */
-  const subscribe = useCallback(() => {
-    Accelerometer.setUpdateInterval(
-      options?.updateIntervalMs ?? SENSOR_UPDATE_INTERVAL_MS
-    );
-    const sub = Accelerometer.addListener((accelerometerData) => {
-      setData(accelerometerData);
-      evaluateAcceleration(accelerometerData);
-    });
-    setSubscription(sub);
-    return sub;
-  }, [evaluateAcceleration, options?.updateIntervalMs]);
+  const startListening = useCallback(() => {
+    if (subRef.current) return;
+    try {
+      Accelerometer.setUpdateInterval(intervalRef.current);
+      const sub = Accelerometer.addListener((accelerometerData) => {
+        setData(accelerometerData);
+        evaluateAcceleration(accelerometerData);
+      });
+      subRef.current = sub;
+      setSubscription(sub);
+    } catch (err) {
+      console.warn('[useAccelerometer] Gagal mengaktifkan sensor:', err);
+    }
+  }, [evaluateAcceleration]);
 
   /**
    * Task 01: Menghentikan langganan (unsubscribe) dan membersihkan listener
    */
-  const unsubscribe = useCallback(() => {
-    if (subscription) {
-      subscription.remove();
+  const stopListening = useCallback(() => {
+    if (subRef.current) {
+      subRef.current.remove();
+      subRef.current = null;
       setSubscription(null);
     }
-  }, [subscription]);
+  }, []);
+
+  const subscribe = useCallback(() => {
+    startListening();
+  }, [startListening]);
+
+  const unsubscribe = useCallback(() => {
+    stopListening();
+  }, [stopListening]);
 
   /**
    * Simulasi Goncangan untuk keperluan pengujian pada Emulator / Web / Demo
@@ -130,7 +158,6 @@ export const useAccelerometer = (options?: UseAccelerometerOptions) => {
   }, [evaluateAcceleration]);
 
   useEffect(() => {
-    let activeSub: Subscription | null = null;
     let isMounted = true;
 
     const initSensor = async () => {
@@ -145,33 +172,36 @@ export const useAccelerometer = (options?: UseAccelerometerOptions) => {
         }
       }
 
-      Accelerometer.setUpdateInterval(
-        options?.updateIntervalMs ?? SENSOR_UPDATE_INTERVAL_MS
-      );
-      activeSub = Accelerometer.addListener((accelerometerData) => {
-        if (!isMounted) return;
-        setData(accelerometerData);
-        evaluateAcceleration(accelerometerData);
-      });
-
-      if (isMounted) {
-        setSubscription(activeSub);
+      // Aktifkan sensor jika aplikasi dalam status 'active'
+      if (AppState.currentState === 'active' && isMounted) {
+        startListening();
       }
     };
 
-    initSensor();
+    void initSensor();
 
-    // Performance Safety (Section 4): Wajib membersihkan listener saat unmount untuk mencegah memory leak
+    // Dengarkan perubahan status AppState (Background / Inactive / Active)
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        startListening();
+      } else {
+        // Hentikan sensor ketika aplikasi berada di background untuk menghemat baterai
+        stopListening();
+      }
+    };
+
+    const appStateSub = AppState.addEventListener('change', handleAppStateChange);
+
+    // Lifecycle cleanup: pastikan subscription.remove() selalu dipanggil saat unmount
     return () => {
       isMounted = false;
-      if (activeSub) {
-        activeSub.remove();
-      }
+      stopListening();
+      appStateSub.remove();
       if (resetTimerRef.current) {
         clearTimeout(resetTimerRef.current);
       }
     };
-  }, [evaluateAcceleration, options?.updateIntervalMs]);
+  }, [startListening, stopListening]);
 
   // Perhitungan magnitudo vektor total dari koordinat mentah (raw numbers)
   const totalAcceleration = Math.sqrt(

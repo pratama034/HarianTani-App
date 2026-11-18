@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
 import { HarvestItem, PanenDTO } from '../types/api';
 import {
-  apiGet,
   apiPost,
   apiPatch,
+  getLaporanPanen,
   isSupabaseConfigured,
 } from '../services/api';
 import { mapPanenDTOtoModel, mapPanenToHarvestItem } from '../utils/mapper';
@@ -17,30 +17,9 @@ export { HarvestItem };
 export const API_BASE_URL = 'https://api.hariantani.id/v1/harvests';
 
 /**
- * Seed data awal panen harian untuk lingkungan demonstrasi offline
+ * Data awal kosong untuk panen harian
  */
-export const INITIAL_HARVESTS: HarvestItem[] = [
-  {
-    id: '1',
-    commodity: 'Padi Ciherang',
-    weightKg: 850,
-    isCompleted: true,
-    date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    idLahan: '1',
-    satuan: 'Kg',
-    hargaJual: 14000,
-  },
-  {
-    id: '2',
-    commodity: 'Jagung Manis',
-    weightKg: 450,
-    isCompleted: false,
-    date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    idLahan: '2',
-    satuan: 'Kg',
-    hargaJual: 9000,
-  },
-];
+export const INITIAL_HARVESTS: HarvestItem[] = [];
 
 // ============================================================================
 // TASK 01 - Tri-State & Fetch Data (GET) dengan AbortController Cleanup
@@ -54,26 +33,35 @@ export interface UseFetchHarvestsReturn {
   error: string | null;
   fetchHarvests: (signal?: AbortSignal) => Promise<void>;
   handleRefresh: () => void;
+  loadMore: () => Promise<void>;
+  hasMore: boolean;
+  loadingMore: boolean;
 }
 
 export const useFetchHarvests = (
-  initialData: HarvestItem[] = INITIAL_HARVESTS
+  initialData: HarvestItem[] = []
 ): UseFetchHarvestsReturn => {
-  // Tri-State: harvests (data), loading, error, plus refreshing
+  // Tri-State: harvests (data), loading, error, plus refreshing & pagination
   const [harvests, setHarvests] = useState<HarvestItem[]>(initialData);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState<number>(1);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
 
   const fetchHarvests = useCallback(async (signal?: AbortSignal) => {
     try {
-      // Coba fetch dari REST API Supabase / PostgREST jika dikonfigurasi
+      // Coba fetch dari REST API Supabase / PostgREST jika dikonfigurasi dengan paginasi awal (limit 20, created_at desc)
       if (isSupabaseConfigured()) {
-        const res = await apiGet<PanenDTO[]>('/rest/v1/laporan_panen?select=*', {
-          signal,
-        });
+        const res = await getLaporanPanen<PanenDTO>({ page: 1, limit: 20 }, { signal });
 
-        if (Array.isArray(res) && res.length > 0) {
+        if (Array.isArray(res)) {
+          if (res.length < 20) {
+            setHasMore(false);
+          } else {
+            setHasMore(true);
+          }
           const mapped = res.map((dto) => {
             const panen = mapPanenDTOtoModel(dto);
             return mapPanenToHarvestItem(
@@ -82,6 +70,7 @@ export const useFetchHarvests = (
             );
           });
           setHarvests(mapped);
+          setPage(1);
           return;
         }
       }
@@ -96,12 +85,10 @@ export const useFetchHarvests = (
         }
       } catch (mockErr: any) {
         if (mockErr.name === 'AbortError') throw mockErr;
-        // Jika endpoint eksternal tidak aktif, gunakan data fallback yang tersedia
-        setHarvests((prev) => (prev.length > 0 ? prev : INITIAL_HARVESTS));
+        // Pertahankan data terakhir di memori, jangan menginjeksi data dummy
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        console.log('Fetch request dibatalkan: Component unmounted');
         return;
       }
       const errorMessage = err.message || 'Terjadi kesalahan jaringan';
@@ -111,6 +98,40 @@ export const useFetchHarvests = (
       setRefreshing(false);
     }
   }, []);
+
+  /**
+   * Logika dasar pagination untuk onEndReached FlatList (offset/page load)
+   */
+  const loadMore = useCallback(async () => {
+    if (loading || loadingMore || !hasMore || refreshing) return;
+    if (!isSupabaseConfigured()) return;
+
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const res = await getLaporanPanen<PanenDTO>({ page: nextPage, limit: 20 });
+      if (Array.isArray(res)) {
+        if (res.length < 20) {
+          setHasMore(false);
+        }
+        if (res.length > 0) {
+          const mapped = res.map((dto) => {
+            const panen = mapPanenDTOtoModel(dto);
+            return mapPanenToHarvestItem(
+              panen,
+              dto.commodity || (panen.idLahan === '2' ? 'Jagung Manis' : 'Padi Ciherang')
+            );
+          });
+          setHarvests((prev) => [...prev, ...mapped]);
+          setPage(nextPage);
+        }
+      }
+    } catch {
+      // Abaikan kegagalan background pagination agar UI tidak terganggu
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loading, loadingMore, hasMore, refreshing, page]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -136,6 +157,9 @@ export const useFetchHarvests = (
     error,
     fetchHarvests,
     handleRefresh,
+    loadMore,
+    hasMore,
+    loadingMore,
   };
 };
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeColors, Radius, Spacing, Shadows } from '../constants/theme';
 
 export interface SplashScreenViewProps {
@@ -10,8 +11,18 @@ export interface SplashScreenViewProps {
 export function SplashScreenView({
   statusText = 'Memuat modul & data pertanian terenkripsi...',
 }: SplashScreenViewProps) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: Math.max(insets.top, 24) + 16,
+          paddingBottom: Math.max(insets.bottom, 24) + 16,
+        },
+      ]}
+    >
       {/* Top Header Badge */}
       <View style={styles.topBadgesRow}>
         <View style={styles.versionBadge}>

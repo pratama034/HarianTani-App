@@ -20,6 +20,9 @@ export interface LahanDTO {
   luas: string;
   tanaman: string;
   tanggal_tanam: string; // Format: YYYY-MM-DD
+  latitude?: number | null;
+  longitude?: number | null;
+  address?: string | null;
   created_at?: string;
 }
 
@@ -91,6 +94,9 @@ export interface Lahan {
   luas: string;
   tanaman: string;
   tanggalTanam: string; // Format: YYYY-MM-DD
+  latitude?: number | null;
+  longitude?: number | null;
+  address?: string | null;
   createdAt?: string;
 }
 

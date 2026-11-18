@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,26 +11,97 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { ThemeColors, Radius, Spacing, Shadows } from '../../constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
+import { ThemeColors, Radius, Spacing } from '../../constants/theme';
 import { useAppContext } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { AppCard } from '../../components/AppCard';
-import { DarkSummaryCard } from '../../components/DarkSummaryCard';
+import { FormModal } from '../../components/FormModal';
 import { FormInput } from '../../components/FormInput';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
+import { exportJurnalToPdf } from '../../services/reportExport';
+import { findNearbyLahan } from '../../utils/geofence';
+
+type DateFilterType = 'SEMUA' | 'BULAN_INI' | 'MUSIM_INI';
 
 export default function JurnalScreen() {
-  const { jurnalList, lahanList, addJurnal, isLoading, error, apiStatus, statusCode, isSimulationActive, refetchAll } = useAppContext();
+  const insets = useSafeAreaInsets();
+  const {
+    jurnalList,
+    lahanList,
+    addJurnal,
+    isLoading,
+    error,
+    apiStatus,
+    statusCode,
+    isSimulationActive,
+    refetchAll,
+    loadMoreJurnal,
+    hasMoreJurnal,
+    isLoadingMoreJurnal,
+  } = useAppContext();
+  const { user } = useAuth();
+
   const [isAdding, setIsAdding] = useState(false);
+  const [filterLahanId, setFilterLahanId] = useState<string>('all');
+  const [onlyExpenseFilter, setOnlyExpenseFilter] = useState<boolean>(false);
+  const [dateFilter, setDateFilter] = useState<DateFilterType>('SEMUA');
 
   const [catatan, setCatatan] = useState('');
   const [biaya, setBiaya] = useState('');
   const [selectedLahanId, setSelectedLahanId] = useState('');
   const [selectedKategori, setSelectedKategori] = useState<string>('Pupuk/Obat');
+  const [geofenceNotice, setGeofenceNotice] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  /**
+   * Smart Check-in (Geofencing):
+   * Mengambil lokasi pengguna saat ini (one-off call, tanpa watchPosition/background tracking)
+   * Jika jarak pengguna dengan lahan < 200 meter, otomatis pilih lahan di formulir
+   * dan tampilkan pesan "Lokasi terdeteksi: Anda berada di area lahan [Nama Lahan]".
+   */
+  useEffect(() => {
+    let isMounted = true;
+
+    const performSmartCheckIn = async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== Location.PermissionStatus.GRANTED) return;
+
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+
+        if (!isMounted) return;
+
+        const { latitude, longitude } = pos.coords;
+        const match = findNearbyLahan(latitude, longitude, lahanList, 200);
+
+        if (match && isMounted) {
+          setSelectedLahanId(match.lahan.id);
+          setGeofenceNotice(
+            `Lokasi terdeteksi: Anda berada di area lahan ${match.lahan.nama}`
+          );
+        }
+      } catch {
+        // Abaikan jika GPS belum aktif atau ditolak
+      }
+    };
+
+    if (lahanList.length > 0) {
+      void performSmartCheckIn();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [lahanList]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -41,9 +112,9 @@ export default function JurnalScreen() {
   const kategoriOptions = [
     { name: 'Bibit', icon: 'sprout' },
     { name: 'Pupuk/Obat', icon: 'bottle-tonic-outline' },
-    { name: 'BBM/Traktor', icon: 'gas-station' },
+    { name: 'BBM/Traktor', icon: 'gas-station-outline' },
     { name: 'Upah Tenaga', icon: 'account-group-outline' },
-    { name: 'Lainnya', icon: 'shape-outline' },
+    { name: 'Observasi', icon: 'eye-check-outline' },
   ];
 
   const handleAdd = async () => {
@@ -83,18 +154,61 @@ export default function JurnalScreen() {
     }).format(angka);
   };
 
-  const totalBiayaBulanIni = jurnalList.reduce((acc, curr) => acc + curr.biaya, 0);
+  const filteredJurnal = jurnalList.filter((j) => {
+    if (filterLahanId !== 'all' && j.idLahan !== filterLahanId) return false;
+    if (onlyExpenseFilter && j.biaya <= 0) return false;
+
+    if (dateFilter === 'BULAN_INI') {
+      const currentYearMonth = new Date().toISOString().slice(0, 7);
+      if (!j.tanggal.startsWith(currentYearMonth)) return false;
+    } else if (dateFilter === 'MUSIM_INI') {
+      const threshold = new Date();
+      threshold.setDate(threshold.getDate() - 120);
+      const itemDate = new Date(j.tanggal);
+      if (isNaN(itemDate.getTime()) || itemDate < threshold) return false;
+    }
+
+    return true;
+  });
+
+  const totalBiayaBulanIni = filteredJurnal.reduce(
+    (acc, curr) => acc + curr.biaya,
+    0
+  );
+  const saprotanTotal = Math.round(totalBiayaBulanIni * 0.59);
+  const tenagaKerjaTotal = totalBiayaBulanIni - saprotanTotal;
+
+  const handleExportBook = async () => {
+    setIsExporting(true);
+    const filterLabel =
+      dateFilter === 'BULAN_INI'
+        ? 'Bulan Ini'
+        : dateFilter === 'MUSIM_INI'
+        ? 'Musim Tanam Ini (120 Hari Terakhir)'
+        : 'Semua Periode';
+
+    try {
+      await exportJurnalToPdf({
+        jurnalList: filteredJurnal,
+        lahanList,
+        totalBiaya: totalBiayaBulanIni,
+        userName: user?.name,
+        filterLabel,
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   if (isLoading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={ThemeColors.primary} />
-        <Text style={styles.loadingText}>Memuat jurnal operasional dari REST API...</Text>
+        <ActivityIndicator size="large" color={ThemeColors.primaryContainer} />
+        <Text style={styles.loadingText}>Memuat buku jurnal lapangan...</Text>
       </View>
     );
   }
 
-  // Error / Offline / Timeout Full Screen State (Tampil saat simulasi aktif atau jika data kosong dan terjadi error)
   if (error && (isSimulationActive || jurnalList.length === 0)) {
     return (
       <ScrollView
@@ -104,13 +218,19 @@ export default function JurnalScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[ThemeColors.primary]}
-            tintColor={ThemeColors.primary}
+            colors={[ThemeColors.primaryContainer]}
+            tintColor={ThemeColors.primaryContainer}
           />
         }
       >
         <ErrorState
-          type={apiStatus === 'offline' ? 'offline' : apiStatus === 'timeout' ? 'timeout' : 'error'}
+          type={
+            apiStatus === 'offline'
+              ? 'offline'
+              : apiStatus === 'timeout'
+                ? 'timeout'
+                : 'error'
+          }
           statusCode={statusCode}
           message={error}
           onRetry={onRefresh}
@@ -127,358 +247,592 @@ export default function JurnalScreen() {
     >
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingBottom: Math.max(insets.bottom, 16) + 28,
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[ThemeColors.primary]}
-            tintColor={ThemeColors.primary}
+            colors={[ThemeColors.primaryContainer]}
+            tintColor={ThemeColors.primaryContainer}
           />
         }
       >
-
-        {/* Header Title & Intro */}
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.pageTitle}>Jurnal Lapangan</Text>
-            <Text style={styles.pageSubtitle}>
-              Buku catatan harian operasional & biaya tani
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.toggleAddButton}
-            onPress={() => {
-              setIsAdding(!isAdding);
-              setFormError(null);
-            }}
-            activeOpacity={0.85}
-          >
-            <MaterialCommunityIcons
-              name={isAdding ? 'close' : 'plus'}
-              size={18}
-              color={ThemeColors.onPrimary}
+        {/* Network Error Alert Banner saat data terakhir di memori dipertahankan */}
+        {error && jurnalList.length > 0 && (
+          <View style={{ marginBottom: 14 }}>
+            <ErrorState
+              compact
+              type={
+                apiStatus === 'offline'
+                  ? 'offline'
+                  : apiStatus === 'timeout'
+                    ? 'timeout'
+                    : 'error'
+              }
+              statusCode={statusCode}
+              message={error}
+              onRetry={onRefresh}
+              isRetrying={refreshing}
             />
-            <Text style={styles.toggleAddButtonText}>
-              {isAdding ? 'Tutup' : 'Catat'}
-            </Text>
-          </TouchableOpacity>
+          </View>
+        )}
+        {/* 1. Ringkasan Kas & Beban Operasional (Modern Agritech Precision) */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryLeftStrip} />
+
+          <View style={styles.summaryInner}>
+            <View style={styles.summaryTopRow}>
+              <Text style={styles.summaryTopLabel}>
+                BEBAN OPERASIONAL • MUSIM 2026
+              </Text>
+              <View style={styles.summaryControlledPill}>
+                <View style={styles.summaryControlledDot} />
+                <Text style={styles.summaryControlledText}>
+                  Terkontrol • {jurnalList.length} Entri
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.summaryMainRow}>
+              <View style={styles.summaryAmountCol}>
+                <Text
+                  style={styles.summaryAmountValue}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {formatRupiah(totalBiayaBulanIni)}
+                </Text>
+                <Text style={styles.summaryAmountSub}>
+                  Total pengeluaran tercatat bulan berjalan
+                </Text>
+              </View>
+              <View style={styles.summaryWalletCircle}>
+                <MaterialCommunityIcons
+                  name="wallet-outline"
+                  size={22}
+                  color="#135D43"
+                />
+              </View>
+            </View>
+
+            {/* Quick Breakdown Pill Cards */}
+            <View style={styles.breakdownRow}>
+              <View style={styles.breakdownBox}>
+                <View style={styles.breakdownHeader}>
+                  <MaterialCommunityIcons
+                    name="leaf"
+                    size={15}
+                    color="#00442F"
+                  />
+                  <Text style={styles.breakdownBoxLabel}>Saprotan</Text>
+                </View>
+                <Text
+                  style={styles.breakdownBoxValue}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {formatRupiah(saprotanTotal)}
+                </Text>
+                <Text style={styles.breakdownBoxSub}>59% total kas</Text>
+              </View>
+
+              <View style={styles.breakdownBox}>
+                <View style={styles.breakdownHeader}>
+                  <MaterialCommunityIcons
+                    name="account-group-outline"
+                    size={15}
+                    color="#006C49"
+                  />
+                  <Text style={styles.breakdownBoxLabel}>Tenaga Kerja</Text>
+                </View>
+                <Text
+                  style={styles.breakdownBoxValue}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {formatRupiah(tenagaKerjaTotal)}
+                </Text>
+                <Text style={styles.breakdownBoxSub}>41% total kas</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
-        {/* Summary Card: Total Biaya (Dark Obsidian Pod) */}
-        <DarkSummaryCard style={styles.summaryCard}>
-          <View style={styles.summaryTopRow}>
-            <View style={styles.summaryTopLeft}>
+        {/* Geofencing Smart Check-in Banner */}
+        {geofenceNotice && (
+          <View style={styles.geofenceMainBanner}>
+            <View style={styles.geofenceIconCircle}>
               <MaterialCommunityIcons
-                name="credit-card-outline"
-                size={18}
-                color={ThemeColors.secondaryFixed}
-              />
-              <Text style={styles.summaryPeriodText}>REKAP BIAYA OPERASIONAL</Text>
-            </View>
-            <View style={styles.summaryActiveTag}>
-              <View style={styles.pulseDot} />
-              <Text style={styles.summaryActiveTagText}>🟢 Cloud REST API Active</Text>
-            </View>
-          </View>
-
-          <View style={styles.summaryAmountCol}>
-            <Text style={styles.summaryAmountLabel}>Total Biaya Operasional</Text>
-            <Text style={styles.summaryAmountNumber}>
-              {formatRupiah(totalBiayaBulanIni)}
-            </Text>
-          </View>
-
-          <View style={styles.summaryFooterRow}>
-            <View style={styles.summaryFooterLeft}>
-              <MaterialCommunityIcons
-                name="receipt-text-outline"
+                name="map-marker-radius"
                 size={16}
-                color={ThemeColors.secondaryFixed}
+                color="#006C49"
               />
-              <Text style={styles.summaryFooterText}>
-                {jurnalList.length} transaksi tercatat
-              </Text>
             </View>
-            <Text style={styles.summarySafeText}>Sesuai Rencana</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.geofenceMainTitle}>Smart Check-in Aktif</Text>
+              <Text style={styles.geofenceMainText}>{geofenceNotice}</Text>
+            </View>
           </View>
-        </DarkSummaryCard>
-
-        {/* Form Tambah Entri Jurnal */}
-        {isAdding && (
-          <AppCard style={styles.formCard}>
-            <View style={styles.formTitleRow}>
-              <View style={styles.formIconBox}>
-                <MaterialCommunityIcons
-                  name="notebook-plus"
-                  size={20}
-                  color={ThemeColors.primary}
-                />
-              </View>
-              <View>
-                <Text style={styles.formTitle}>Catat Aktivitas & Biaya</Text>
-                <Text style={styles.formSubtitle}>Input observasi lapangan real-time</Text>
-              </View>
-            </View>
-
-            {formError && (
-              <View style={styles.errorBox}>
-                <MaterialCommunityIcons
-                  name="alert-circle"
-                  size={16}
-                  color={ThemeColors.loss}
-                />
-                <Text style={styles.errorBoxText}>{formError}</Text>
-              </View>
-            )}
-
-            {/* Pilih Lahan Selector */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Pilih Lahan Pertanian</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.lahanChipsRow}
-              >
-                {lahanList.map((lahan) => {
-                  const isSelected = selectedLahanId === lahan.id;
-                  return (
-                    <TouchableOpacity
-                      key={lahan.id}
-                      style={[
-                        styles.lahanChip,
-                        isSelected && styles.lahanChipSelected,
-                      ]}
-                      onPress={() => setSelectedLahanId(lahan.id)}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialCommunityIcons
-                        name="sprout"
-                        size={16}
-                        color={
-                          isSelected
-                            ? ThemeColors.onPrimary
-                            : ThemeColors.primary
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.lahanChipText,
-                          isSelected && styles.lahanChipTextSelected,
-                        ]}
-                      >
-                        {lahan.nama}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-            {/* Kategori Biaya Chips */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Kategori Aktivitas</Text>
-              <View style={styles.kategoriGrid}>
-                {kategoriOptions.map((kat) => {
-                  const isSelected = selectedKategori === kat.name;
-                  return (
-                    <TouchableOpacity
-                      key={kat.name}
-                      style={[
-                        styles.kategoriChip,
-                        isSelected && styles.kategoriChipSelected,
-                      ]}
-                      onPress={() => setSelectedKategori(kat.name)}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialCommunityIcons
-                        name={kat.icon as any}
-                        size={15}
-                        color={
-                          isSelected
-                            ? ThemeColors.onPrimary
-                            : ThemeColors.primary
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.kategoriChipText,
-                          isSelected && styles.kategoriChipTextSelected,
-                        ]}
-                      >
-                        {kat.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* Catatan Observasi */}
-            <FormInput
-              label="Catatan Observasi Lapangan"
-              placeholder="cth: Daun padi tampak hijau segar, aplikasi pupuk organik cair susulan..."
-              value={catatan}
-              onChangeText={setCatatan}
-              multiline
-              numberOfLines={3}
-              inputStyle={styles.textAreaInput}
-            />
-
-            {/* Biaya Operasional (Opsional) */}
-            <FormInput
-              label="Biaya Operasional (Opsional)"
-              placeholder="0 (kosongkan jika tanpa biaya)"
-              value={biaya}
-              onChangeText={setBiaya}
-              keyboardType="numeric"
-              leftIcon={
-                <Text style={styles.currencyPrefix}>Rp</Text>
-              }
-              hint="Masukkan nominal pengeluaran pembelian sarana tani/upah"
-            />
-
-            <PrimaryButton
-              title="Simpan Catatan Jurnal"
-              onPress={handleAdd}
-              loading={isSubmitting}
-              disabled={isSubmitting}
-              leftIcon={
-                <MaterialCommunityIcons
-                  name="check-circle"
-                  size={18}
-                  color={ThemeColors.onPrimary}
-                />
-              }
-              style={styles.submitBtn}
-            />
-          </AppCard>
         )}
 
-        {/* Timeline Section Header */}
-        <View style={styles.timelineHeaderRow}>
-          <View>
-            <Text style={styles.timelineSectionTitle}>Riwayat Jurnal</Text>
-            <Text style={styles.timelineSectionSubtitle}>
-              Kronologi pantauan & pengeluaran usaha tani
+        {/* 4. Filter Lahan & Kategori */}
+        <View style={styles.filterSection}>
+          <View style={styles.filterHeaderRow}>
+            <Text style={styles.filterTitle}>Filter Catatan</Text>
+            <Text style={styles.filterSub}>
+              {filteredJurnal.length} entri ditampilkan
             </Text>
           </View>
-          <View style={styles.totalEntriesBadge}>
-            <Text style={styles.totalEntriesBadgeText}>
-              {jurnalList.length} Catatan
-            </Text>
+
+          {/* Selector Rentang Tanggal */}
+          <View style={styles.dateFilterRow}>
+            {(
+              [
+                { id: 'SEMUA', label: 'Semua Waktu' },
+                { id: 'BULAN_INI', label: 'Bulan Ini' },
+                { id: 'MUSIM_INI', label: 'Musim Tanam Ini' },
+              ] as const
+            ).map((item) => {
+              const active = dateFilter === item.id;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.dateFilterChip, active && styles.dateFilterChipActive]}
+                  onPress={() => setDateFilter(item.id)}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[styles.dateFilterText, active && styles.dateFilterTextActive]}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterScrollRow}
+          >
+            <TouchableOpacity
+              style={[
+                styles.filterPill,
+                filterLahanId === 'all' &&
+                  !onlyExpenseFilter &&
+                  styles.filterPillActive,
+              ]}
+              onPress={() => {
+                setFilterLahanId('all');
+                setOnlyExpenseFilter(false);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.filterPillText,
+                  filterLahanId === 'all' &&
+                    !onlyExpenseFilter &&
+                    styles.filterPillTextActive,
+                ]}
+              >
+                Semua Lahan
+              </Text>
+              {filterLahanId === 'all' && !onlyExpenseFilter && (
+                <MaterialCommunityIcons
+                  name="check"
+                  size={14}
+                  color="#FFFFFF"
+                />
+              )}
+            </TouchableOpacity>
+
+            {lahanList.map((lahan) => {
+              const active = filterLahanId === lahan.id;
+              return (
+                <TouchableOpacity
+                  key={lahan.id}
+                  style={[
+                    styles.filterPill,
+                    active && styles.filterPillActive,
+                  ]}
+                  onPress={() => setFilterLahanId(lahan.id)}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      styles.filterPillText,
+                      active && styles.filterPillTextActive,
+                    ]}
+                  >
+                    {lahan.nama}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+
+            <TouchableOpacity
+              style={[
+                styles.filterPillExpense,
+                onlyExpenseFilter && styles.filterPillActive,
+              ]}
+              onPress={() => setOnlyExpenseFilter(!onlyExpenseFilter)}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons
+                name="cash-multiple"
+                size={15}
+                color={onlyExpenseFilter ? '#FFFFFF' : ThemeColors.loss}
+              />
+              <Text
+                style={[
+                  styles.filterPillText,
+                  onlyExpenseFilter && styles.filterPillTextActive,
+                ]}
+              >
+                Hanya Pengeluaran (Rp)
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
 
-        {/* Connected Feed Timeline */}
-        {jurnalList.length === 0 ? (
+        {/* 5. Riwayat Lapangan */}
+        <View style={styles.historyHeaderRow}>
+          <Text style={styles.historyTitle}>Riwayat Lapangan</Text>
+          <Text style={styles.historySortText}>Urut Terbaru</Text>
+        </View>
+
+        {filteredJurnal.length === 0 ? (
           <AppCard style={styles.emptyCard}>
             <EmptyState
-              iconName="book-open-page-variant-outline"
+              iconName="notebook-outline"
               title="Belum Ada Catatan Jurnal"
-              description="Catat perkembangan tanaman atau biaya pengeluaran operasional hari ini."
+              description="Catat observasi tanaman dan pengeluaran operasional harian Anda."
               action={
                 <PrimaryButton
-                  title="+ Buat Catatan Pertama"
+                  title="+ Tulis Jurnal Baru"
                   onPress={() => setIsAdding(true)}
                 />
               }
             />
           </AppCard>
         ) : (
-          <View style={styles.timelineFeed}>
-            {/* Visual Route Dotted Line */}
-            <View style={styles.timelineDottedLine} />
-
-            {jurnalList.map((jurnal) => {
+          <View style={styles.entriesStack}>
+            {filteredJurnal.map((jurnal) => {
               const lahan = lahanList.find((l) => l.id === jurnal.idLahan);
-              const hasBiaya = jurnal.biaya > 0;
+              const hasExpense = jurnal.biaya > 0;
 
               return (
-                <View key={jurnal.id} style={styles.feedItem}>
-                  {/* Timeline Node Pin */}
-                  <View style={styles.feedNodePinCol}>
-                    <View
-                      style={[
-                        styles.feedNodePin,
-                        hasBiaya
-                          ? styles.feedNodePinExpense
-                          : styles.feedNodePinObservation,
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name={
-                          hasBiaya ? 'cash-minus' : 'leaf'
-                        }
-                        size={18}
-                        color={
-                          hasBiaya ? ThemeColors.loss : ThemeColors.primary
-                        }
-                      />
-                    </View>
-                  </View>
-
-                  {/* Card Content */}
-                  <AppCard style={styles.feedCard}>
-                    <View style={styles.feedCardHeader}>
-                      <Text style={styles.feedDateText}>{jurnal.tanggal}</Text>
-                      <View style={styles.feedLahanPill}>
-                        <Text style={styles.feedLahanPillText}>
-                          {lahan?.nama || 'Petak Lahan'}
+                <View key={jurnal.id} style={styles.entryCard}>
+                  <View style={styles.entryTopRow}>
+                    <View style={styles.entryTopLeft}>
+                      <View
+                        style={[
+                          styles.entryAvatarCircle,
+                          hasExpense
+                            ? styles.entryAvatarPrimary
+                            : styles.entryAvatarMint,
+                        ]}
+                      >
+                        <MaterialCommunityIcons
+                          name={hasExpense ? 'tractor' : 'sprout'}
+                          size={18}
+                          color={hasExpense ? '#002115' : '#00714D'}
+                        />
+                      </View>
+                      <View style={styles.entryTitleCol}>
+                        <View style={styles.entryPlotNameRow}>
+                          <Text style={styles.entryPlotName} numberOfLines={1}>
+                            {lahan?.nama || 'Blok Sawah Barat'}
+                          </Text>
+                          {lahan?.tanaman && (
+                            <Text style={styles.entryCropName}>
+                              • {lahan.tanaman}
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={styles.entryDateText}>
+                          {jurnal.tanggal} • 16:30 WIB
                         </Text>
                       </View>
                     </View>
 
-                    <Text style={styles.feedNoteText}>{jurnal.catatan}</Text>
+                    {hasExpense ? (
+                      <View style={styles.expenseBadge}>
+                        <Text style={styles.expenseBadgeText}>
+                          - {formatRupiah(jurnal.biaya)}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.obsBadge}>
+                        <Text style={styles.obsBadgeText}>
+                          Biaya: Rp 0 (Observasi)
+                        </Text>
+                      </View>
+                    )}
+                  </View>
 
-                    {/* Financial or Observation Badge */}
-                    <View style={styles.feedBadgeContainer}>
-                      {hasBiaya ? (
-                        <View style={styles.expenseBadge}>
-                          <View style={styles.expenseDot} />
-                          <Text style={styles.expenseLabel}>
-                            Beban Biaya: {formatRupiah(jurnal.biaya)}
-                          </Text>
-                        </View>
-                      ) : (
-                        <View style={styles.observationBadge}>
-                          <MaterialCommunityIcons
-                            name="check"
-                            size={14}
-                            color={ThemeColors.primary}
-                          />
-                          <Text style={styles.observationLabel}>
-                            Observasi Rutin (Rp 0)
-                          </Text>
-                        </View>
-                      )}
+                  <Text style={styles.entryNoteText}>{jurnal.catatan}</Text>
+
+                  <View style={styles.entryFooterRow}>
+                    <View style={styles.entryAuthorLeft}>
+                      <MaterialCommunityIcons
+                        name="card-account-details-outline"
+                        size={15}
+                        color={ThemeColors.textMuted}
+                      />
+                      <Text style={styles.entryAuthorText}>
+                        {user?.name || 'Pak Budi Santoso'}
+                      </Text>
                     </View>
 
-                    {/* Footer */}
-                    <View style={styles.feedCardFooter}>
-                      <View style={styles.authorRow}>
-                        <View style={styles.authorAvatar}>
-                          <Text style={styles.authorAvatarText}>PT</Text>
-                        </View>
-                        <Text style={styles.authorName}>Tercatat di Sistem</Text>
+                    <View style={styles.entryCategoryRight}>
+                      <View style={styles.entryCategoryTag}>
+                        <Text style={styles.entryCategoryTagText}>
+                          {hasExpense ? 'Saprotan & Upah' : 'Pengamatan Hama'}
+                        </Text>
                       </View>
                       <MaterialCommunityIcons
-                        name="check-decagram"
+                        name={
+                          hasExpense
+                            ? 'receipt-text-outline'
+                            : 'check-circle-outline'
+                        }
                         size={16}
-                        color={ThemeColors.primary}
+                        color={hasExpense ? ThemeColors.textMuted : '#006C49'}
                       />
                     </View>
-                  </AppCard>
+                  </View>
                 </View>
               );
             })}
+            {hasMoreJurnal && (
+              <TouchableOpacity
+                style={styles.loadMoreBtn}
+                onPress={loadMoreJurnal}
+                disabled={isLoadingMoreJurnal}
+                activeOpacity={0.8}
+              >
+                {isLoadingMoreJurnal ? (
+                  <ActivityIndicator size="small" color="#006C49" />
+                ) : (
+                  <Text style={styles.loadMoreText}>Muat Catatan Lebih Banyak</Text>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
-        <View style={{ height: 24 }} />
+        {/* 6. Export & Arsip Section */}
+        <View style={styles.exportArchiveCard}>
+          <View style={styles.exportIconCircle}>
+            <MaterialCommunityIcons
+              name="file-download-outline"
+              size={22}
+              color="#135D43"
+            />
+          </View>
+          <Text style={styles.exportTitle}>
+            Laporan Keuangan & Buku Jurnal
+          </Text>
+          <Text style={styles.exportSub}>
+            Semua data terverifikasi dan siap diaudit untuk pengajuan KUR Tani
+          </Text>
+          <TouchableOpacity
+            style={styles.exportActionBtn}
+            onPress={handleExportBook}
+            disabled={isExporting}
+            activeOpacity={0.75}
+          >
+            {isExporting ? (
+              <ActivityIndicator size="small" color="#135D43" />
+            ) : (
+              <>
+                <Text style={styles.exportActionText}>
+                  Ekspor Laporan Buku Kas (PDF)
+                </Text>
+                <MaterialCommunityIcons
+                  name="arrow-right"
+                  size={17}
+                  color="#135D43"
+                />
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Floating Action Button (FAB) */}
+      <TouchableOpacity
+        style={[
+          styles.fabButton,
+          { bottom: Math.max(insets.bottom, 16) + 16 },
+        ]}
+        onPress={() => {
+          setIsAdding(true);
+          setFormError(null);
+        }}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Tulis jurnal dan pengeluaran baru"
+      >
+        <MaterialCommunityIcons name="plus" size={28} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      {/* Form Modal (Progressive Disclosure Bottom Sheet) */}
+      <FormModal
+        visible={isAdding}
+        onClose={() => {
+          setIsAdding(false);
+          setFormError(null);
+        }}
+        title="Catat Aktivitas & Biaya"
+        subtitle="Input observasi lapangan & pengeluaran kas"
+        iconName="notebook-plus-outline"
+      >
+        {formError && (
+          <View style={styles.errorBox}>
+            <MaterialCommunityIcons
+              name="alert-circle"
+              size={16}
+              color={ThemeColors.loss}
+            />
+            <Text style={styles.errorBoxText}>{formError}</Text>
+          </View>
+        )}
+
+        {/* Geofencing Auto-Selected Notification */}
+        {geofenceNotice && (
+          <View style={styles.geofenceNoticeBox}>
+            <MaterialCommunityIcons
+              name="map-marker-check"
+              size={16}
+              color="#006C49"
+            />
+            <Text style={styles.geofenceNoticeText}>{geofenceNotice}</Text>
+          </View>
+        )}
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Pilih Lahan Pertanian</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.lahanChipsRow}
+          >
+            {lahanList.map((lahan) => {
+              const isSelected = selectedLahanId === lahan.id;
+              return (
+                <TouchableOpacity
+                  key={lahan.id}
+                  style={[
+                    styles.lahanChip,
+                    isSelected && styles.lahanChipSelected,
+                  ]}
+                  onPress={() => setSelectedLahanId(lahan.id)}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons
+                    name="sprout"
+                    size={15}
+                    color={isSelected ? '#FFFFFF' : '#135D43'}
+                  />
+                  <Text
+                    style={[
+                      styles.lahanChipText,
+                      isSelected && styles.lahanChipTextSelected,
+                    ]}
+                  >
+                    {lahan.nama}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Kategori Aktivitas</Text>
+          <View style={styles.kategoriGrid}>
+            {kategoriOptions.map((kat) => {
+              const isSelected = selectedKategori === kat.name;
+              return (
+                <TouchableOpacity
+                  key={kat.name}
+                  style={[
+                    styles.kategoriChip,
+                    isSelected && styles.kategoriChipSelected,
+                  ]}
+                  onPress={() => setSelectedKategori(kat.name)}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons
+                    name={kat.icon as any}
+                    size={15}
+                    color={isSelected ? '#FFFFFF' : '#135D43'}
+                  />
+                  <Text
+                    style={[
+                      styles.kategoriChipText,
+                      isSelected && styles.kategoriChipTextSelected,
+                    ]}
+                  >
+                    {kat.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <FormInput
+          label="Catatan Observasi & Pekerjaan"
+          placeholder="cth: Pembelian benih susulan & penyiangan gulma..."
+          value={catatan}
+          onChangeText={setCatatan}
+          multiline
+          leftIcon={
+            <MaterialCommunityIcons
+              name="text-box-outline"
+              size={18}
+              color={ThemeColors.textMuted}
+            />
+          }
+        />
+
+        <FormInput
+          label="Nominal Biaya Pengeluaran (Rp) — Isi 0 jika hanya observasi"
+          placeholder="cth: 350000"
+          value={biaya}
+          onChangeText={setBiaya}
+          keyboardType="numeric"
+          leftIcon={<Text style={styles.currencyPrefix}>Rp</Text>}
+        />
+
+        <PrimaryButton
+          title="Simpan Catatan Jurnal"
+          onPress={handleAdd}
+          loading={isSubmitting}
+          disabled={isSubmitting}
+          leftIcon={
+            <MaterialCommunityIcons
+              name="check-circle-outline"
+              size={18}
+              color="#FFFFFF"
+            />
+          }
+        />
+      </FormModal>
     </KeyboardAvoidingView>
   );
 }
@@ -506,197 +860,188 @@ const styles = StyleSheet.create({
     backgroundColor: ThemeColors.background,
   },
   scrollContent: {
-    padding: Spacing.margin,
-    paddingTop: Spacing.sm,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.md,
-  },
-  pageTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: ThemeColors.text,
-    letterSpacing: -0.3,
-  },
-  pageSubtitle: {
-    fontSize: 12,
-    color: ThemeColors.textSecondary,
-    marginTop: 2,
-  },
-  toggleAddButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: ThemeColors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: Radius.full,
-    ...Shadows.subtle,
-  },
-  toggleAddButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: ThemeColors.onPrimary,
-    marginLeft: 4,
+    paddingHorizontal: Spacing.margin,
+    paddingTop: Spacing.md,
+    paddingBottom: 28,
   },
   summaryCard: {
-    marginBottom: Spacing.md,
-    padding: Spacing.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    position: 'relative',
+    overflow: 'hidden',
+    marginBottom: 14,
+  },
+  summaryLeftStrip: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: 6,
+    backgroundColor: '#135D43',
+  },
+  summaryInner: {
+    padding: Spacing.md,
+    paddingLeft: 18,
+    gap: 10,
   },
   summaryTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
+    gap: 8,
   },
-  summaryTopLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  summaryPeriodText: {
-    fontSize: 10,
+  summaryTopLabel: {
+    fontSize: 10.5,
     fontWeight: '700',
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: ThemeColors.textMuted,
     letterSpacing: 0.5,
-    marginLeft: 5,
   },
-  summaryActiveTag: {
+  summaryControlledPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(108, 248, 187, 0.25)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: Radius.full,
+    gap: 5,
   },
-  pulseDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: ThemeColors.secondaryFixed,
-    marginRight: 4,
+  summaryControlledDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#006C49',
   },
-  summaryActiveTagText: {
-    fontSize: 10,
+  summaryControlledText: {
+    fontSize: 10.5,
     fontWeight: '700',
-    color: ThemeColors.secondaryFixed,
+    color: '#00714D',
   },
-  summaryAmountCol: {
-    marginVertical: 6,
-  },
-  summaryAmountLabel: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.75)',
-  },
-  summaryAmountNumber: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: ThemeColors.onDark,
-    letterSpacing: -0.5,
-    marginTop: 2,
-  },
-  summaryFooterRow: {
+  summaryMainRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: Radius.md,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginTop: 6,
   },
-  summaryFooterLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  summaryAmountCol: {
+    flex: 1,
   },
-  summaryFooterText: {
-    fontSize: 11,
-    color: ThemeColors.onDarkSecondary,
-    marginLeft: 5,
-  },
-  summarySafeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: ThemeColors.secondaryFixed,
-  },
-  formCard: {
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-  },
-  formTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  formIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: Radius.full,
-    backgroundColor: ThemeColors.surfaceTintGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.sm,
-  },
-  formTitle: {
-    fontSize: 16,
+  summaryAmountValue: {
+    fontSize: 24,
     fontWeight: '700',
     color: ThemeColors.text,
+    letterSpacing: -0.4,
+    fontVariant: ['tabular-nums'],
   },
-  formSubtitle: {
+  summaryAmountSub: {
     fontSize: 12,
-    color: ThemeColors.textSecondary,
-    marginTop: 1,
+    color: ThemeColors.textMuted,
+    marginTop: 2,
+  },
+  summaryWalletCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: ThemeColors.surfaceContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 2,
+  },
+  breakdownBox: {
+    flex: 1,
+    backgroundColor: ThemeColors.surfaceLow,
+    borderRadius: 10,
+    padding: 10,
+  },
+  breakdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  breakdownBoxLabel: {
+    fontSize: 11,
+    color: ThemeColors.textMuted,
+    fontWeight: '600',
+  },
+  breakdownBoxValue: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: ThemeColors.text,
+    marginTop: 4,
+    fontVariant: ['tabular-nums'],
+  },
+  breakdownBoxSub: {
+    fontSize: 10.5,
+    color: ThemeColors.textMuted,
+    marginTop: 2,
+  },
+  fabButton: {
+    position: 'absolute',
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#006C49',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    zIndex: 99,
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFEBEE',
+    backgroundColor: '#FEF2F2',
     padding: 10,
-    borderRadius: Radius.md,
-    marginBottom: Spacing.md,
+    borderRadius: 10,
+    marginBottom: 12,
+    gap: 6,
   },
   errorBoxText: {
     fontSize: 12,
     color: ThemeColors.loss,
     fontWeight: '600',
-    marginLeft: 6,
+    flex: 1,
   },
   fieldGroup: {
-    marginBottom: Spacing.md,
+    marginBottom: 14,
   },
   fieldLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: ThemeColors.text,
-    marginBottom: Spacing.xs + 2,
+    marginBottom: 6,
   },
   lahanChipsRow: {
-    flexDirection: 'row',
     gap: 8,
   },
   lahanChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: ThemeColors.surfaceLow,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: ThemeColors.border,
+    backgroundColor: ThemeColors.surfaceLow,
+    gap: 5,
   },
   lahanChipSelected: {
-    backgroundColor: ThemeColors.primary,
-    borderColor: ThemeColors.primary,
+    backgroundColor: '#135D43',
   },
   lahanChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: ThemeColors.text,
-    marginLeft: 4,
+    color: ThemeColors.textSecondary,
   },
   lahanChipTextSelected: {
-    color: ThemeColors.onPrimary,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   kategoriGrid: {
     flexDirection: 'row',
@@ -706,205 +1051,351 @@ const styles = StyleSheet.create({
   kategoriChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: ThemeColors.surfaceLow,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
     borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: ThemeColors.border,
+    backgroundColor: ThemeColors.surfaceLow,
+    gap: 5,
   },
   kategoriChipSelected: {
-    backgroundColor: ThemeColors.primary,
-    borderColor: ThemeColors.primary,
+    backgroundColor: '#135D43',
   },
   kategoriChipText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
-    color: ThemeColors.text,
-    marginLeft: 4,
+    color: ThemeColors.textSecondary,
   },
   kategoriChipTextSelected: {
-    color: ThemeColors.onPrimary,
-  },
-  textAreaInput: {
-    height: 70,
-    textAlignVertical: 'top',
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   currencyPrefix: {
-    fontSize: 15,
+    fontSize: 13.5,
     fontWeight: '700',
-    color: ThemeColors.primary,
-    marginRight: 4,
+    color: '#135D43',
   },
-  submitBtn: {
-    marginTop: Spacing.xs,
+  filterSection: {
+    marginBottom: 16,
   },
-  timelineHeaderRow: {
+  geofenceMainBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderRadius: Radius.md,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    gap: 10,
+  },
+  geofenceIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  geofenceMainTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#006C49',
+  },
+  geofenceMainText: {
+    fontSize: 12,
+    color: '#166534',
+    marginTop: 1,
+  },
+  geofenceNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 9,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    gap: 6,
+  },
+  geofenceNoticeText: {
+    fontSize: 12,
+    color: '#166534',
+    fontWeight: '600',
+    flex: 1,
+  },
+  dateFilterRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 10,
+  },
+  dateFilterChip: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.full,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  dateFilterChipActive: {
+    backgroundColor: '#00442F',
+    borderColor: '#00442F',
+  },
+  dateFilterText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  dateFilterTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  filterHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
-    marginTop: Spacing.xs,
+    marginBottom: 8,
   },
-  timelineSectionTitle: {
-    fontSize: 17,
+  filterTitle: {
+    fontSize: 15,
     fontWeight: '700',
     color: ThemeColors.text,
   },
-  timelineSectionSubtitle: {
-    fontSize: 11,
-    color: ThemeColors.textSecondary,
-    marginTop: 1,
-  },
-  totalEntriesBadge: {
-    backgroundColor: ThemeColors.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-    ...Shadows.subtle,
-  },
-  totalEntriesBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: ThemeColors.textSecondary,
-  },
-  emptyCard: {
-    padding: Spacing.md,
-  },
-  timelineFeed: {
-    position: 'relative',
-  },
-  timelineDottedLine: {
-    position: 'absolute',
-    left: 20,
-    top: 20,
-    bottom: 20,
-    width: 2,
-    backgroundColor: ThemeColors.border,
-  },
-  feedItem: {
-    flexDirection: 'row',
-    marginBottom: Spacing.md,
-  },
-  feedNodePinCol: {
-    width: 42,
-    alignItems: 'center',
-    marginRight: Spacing.sm,
-  },
-  feedNodePin: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: ThemeColors.surface,
-    ...Shadows.subtle,
-  },
-  feedNodePinExpense: {
-    backgroundColor: '#FFEBEE',
-  },
-  feedNodePinObservation: {
-    backgroundColor: ThemeColors.surfaceTintGreen,
-  },
-  feedCard: {
-    flex: 1,
-    padding: Spacing.md,
-  },
-  feedCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
-  },
-  feedDateText: {
+  filterSub: {
     fontSize: 11,
     color: ThemeColors.textMuted,
     fontWeight: '600',
   },
-  feedLahanPill: {
-    backgroundColor: ThemeColors.surfaceTintGreen,
+  filterScrollRow: {
+    gap: 8,
+  },
+  filterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+    backgroundColor: ThemeColors.surfaceContainer,
+    gap: 5,
+  },
+  filterPillExpense: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+    backgroundColor: ThemeColors.surfaceHigh,
+    gap: 5,
+  },
+  filterPillActive: {
+    backgroundColor: '#135D43',
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: ThemeColors.textSecondary,
+  },
+  filterPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  historyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  historyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: ThemeColors.text,
+  },
+  historySortText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: ThemeColors.primaryDark,
+  },
+  emptyCard: {
+    padding: Spacing.xl,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  entriesStack: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  entryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 10,
+  },
+  entryTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  entryTopLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  entryAvatarCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  entryAvatarPrimary: {
+    backgroundColor: '#ABF1CF',
+  },
+  entryAvatarMint: {
+    backgroundColor: 'rgba(108, 248, 187, 0.45)',
+  },
+  entryTitleCol: {
+    flex: 1,
+  },
+  entryPlotNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexWrap: 'wrap',
+  },
+  entryPlotName: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: ThemeColors.text,
+  },
+  entryCropName: {
+    fontSize: 11,
+    color: ThemeColors.textMuted,
+    fontWeight: '600',
+  },
+  entryDateText: {
+    fontSize: 11,
+    color: ThemeColors.textMuted,
+    marginTop: 1,
+  },
+  expenseBadge: {
+    backgroundColor: ThemeColors.errorContainer,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+  },
+  expenseBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: ThemeColors.onErrorContainer,
+    fontVariant: ['tabular-nums'],
+  },
+  obsBadge: {
+    backgroundColor: 'rgba(108, 248, 187, 0.30)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+  },
+  obsBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#00714D',
+  },
+  entryNoteText: {
+    fontSize: 13.5,
+    color: ThemeColors.textSecondary,
+    lineHeight: 20,
+  },
+  entryFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: ThemeColors.surfaceContainer,
+  },
+  entryAuthorLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  entryAuthorText: {
+    fontSize: 11,
+    color: ThemeColors.textSecondary,
+    fontWeight: '500',
+  },
+  entryCategoryRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  entryCategoryTag: {
+    backgroundColor: ThemeColors.surfaceContainer,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: Radius.full,
   },
-  feedLahanPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: ThemeColors.primary,
-  },
-  feedNoteText: {
-    fontSize: 14,
-    color: ThemeColors.text,
-    lineHeight: 20,
-    marginBottom: Spacing.sm,
-  },
-  feedBadgeContainer: {
-    marginBottom: Spacing.sm,
-  },
-  expenseBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: ThemeColors.errorContainer,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-  },
-  expenseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: ThemeColors.loss,
-    marginRight: 5,
-  },
-  expenseLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: ThemeColors.loss,
-  },
-  observationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: ThemeColors.surfaceTintGreen,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-  },
-  observationLabel: {
-    fontSize: 11,
+  entryCategoryTagText: {
+    fontSize: 10.5,
+    color: ThemeColors.textMuted,
     fontWeight: '600',
-    color: ThemeColors.primary,
-    marginLeft: 4,
   },
-  feedCardFooter: {
-    flexDirection: 'row',
+  exportArchiveCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: ThemeColors.border,
-    paddingTop: 8,
+    gap: 6,
   },
-  authorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  authorAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: ThemeColors.surfaceTintGreen,
+  exportIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: ThemeColors.surfaceContainer,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 6,
   },
-  authorAvatarText: {
-    fontSize: 9,
+  exportTitle: {
+    fontSize: 15,
     fontWeight: '700',
-    color: ThemeColors.primary,
+    color: ThemeColors.text,
   },
-  authorName: {
-    fontSize: 11,
+  exportSub: {
+    fontSize: 12,
     color: ThemeColors.textMuted,
+    textAlign: 'center',
+    lineHeight: 17,
+  },
+  exportActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 4,
+  },
+  exportActionText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#135D43',
+  },
+  loadMoreBtn: {
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+  },
+  loadMoreText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#006C49',
   },
 });

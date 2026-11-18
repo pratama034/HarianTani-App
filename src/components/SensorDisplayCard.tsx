@@ -58,8 +58,8 @@ export const SensorDisplayCard: React.FC<SensorDisplayCardProps> = ({
           <View style={styles.iconBadge}>
             <MaterialCommunityIcons
               name="axis-arrow"
-              size={20}
-              color={ThemeColors.primary}
+              size={19}
+              color={ThemeColors.primaryContainer}
             />
           </View>
           <View style={styles.titleTextWrapper}>
@@ -89,8 +89,8 @@ export const SensorDisplayCard: React.FC<SensorDisplayCardProps> = ({
               styles.pulseDot,
               {
                 backgroundColor: isAvailable
-                  ? ThemeColors.primary
-                  : ThemeColors.textSecondary,
+                  ? '#006C49'
+                  : ThemeColors.textMuted,
               },
             ]}
           />
@@ -99,8 +99,8 @@ export const SensorDisplayCard: React.FC<SensorDisplayCardProps> = ({
               styles.sensorToggleText,
               {
                 color: isAvailable
-                  ? ThemeColors.primary
-                  : ThemeColors.textSecondary,
+                  ? '#005139'
+                  : ThemeColors.textMuted,
               },
             ]}
           >
@@ -130,7 +130,7 @@ export const SensorDisplayCard: React.FC<SensorDisplayCardProps> = ({
         </View>
       </View>
 
-      {/* Task 03: Banner Interaksi & Klasifikasi Goncangan (Normal / Moderate / Extreme Shake) */}
+      {/* Task 03: Banner Interaksi & Klasifikasi Goncangan */}
       <View
         style={[
           styles.statusBox,
@@ -142,6 +142,23 @@ export const SensorDisplayCard: React.FC<SensorDisplayCardProps> = ({
         ]}
       >
         <View style={styles.statusHeaderRow}>
+          <MaterialCommunityIcons
+            name={
+              shakeDetected
+                ? 'alert-octagon'
+                : isModerate
+                  ? 'motion-sensor'
+                  : 'check-decagram'
+            }
+            size={16}
+            color={
+              shakeDetected
+                ? '#B91C1C'
+                : isModerate
+                  ? '#B45309'
+                  : '#006C49'
+            }
+          />
           <Text
             style={[
               styles.statusText,
@@ -153,17 +170,17 @@ export const SensorDisplayCard: React.FC<SensorDisplayCardProps> = ({
             ]}
           >
             {shakeDetected
-              ? '⚠️ Goncangan Terdeteksi!'
+              ? 'Goncangan Terdeteksi! Menyegarkan Data...'
               : isModerate
-                ? '⚡ Status Perangkat: Pergerakan Terdeteksi'
-                : '✅ Status Perangkat: Kondisi Stabil'}
+                ? 'Status Perangkat: Pergerakan Terdeteksi'
+                : 'Status Perangkat: Kondisi Stabil'}
           </Text>
         </View>
 
         <Text style={styles.forceSubtext}>
           Total Akselerasi: {totalAcceleration.toFixed(2)} g{' '}
           {shakeDetected
-            ? `• Menyegarkan data cuaca & lahan...`
+            ? '• Sinkronisasi aktif'
             : isModerate
               ? `(Moderat: ${NORMAL_ACCELERATION_MAX.toFixed(2)}g – 1.77g)`
               : `(Normal: ≤ ${NORMAL_ACCELERATION_MAX.toFixed(2)}g)`}
@@ -178,10 +195,10 @@ export const SensorDisplayCard: React.FC<SensorDisplayCardProps> = ({
             size={15}
             color={ThemeColors.textSecondary}
           />
-          <Text style={styles.footerInfoText}>
+          <Text style={styles.footerInfoText} numberOfLines={1}>
             {lastShakeTimestamp
               ? `Shake-Refresh: ${lastShakeTimestamp} (${shakeCount}x)`
-              : 'Belum ada goncangan ekstrem'}
+              : 'Siap deteksi goncangan lapangan'}
           </Text>
         </View>
 
@@ -195,7 +212,7 @@ export const SensorDisplayCard: React.FC<SensorDisplayCardProps> = ({
           <MaterialCommunityIcons
             name="phone-rotate-landscape"
             size={14}
-            color={ThemeColors.primary}
+            color={ThemeColors.primaryContainer}
           />
           <Text style={styles.simulateButtonText}>Uji Goncangan</Text>
         </TouchableOpacity>
@@ -207,11 +224,11 @@ export const SensorDisplayCard: React.FC<SensorDisplayCardProps> = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
-    padding: 16,
+    padding: 15,
     borderRadius: Radius.lg,
     marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(191, 201, 193, 0.35)',
+    borderColor: '#A7F3D0',
     ...Shadows.card,
   },
   headerRow: {
@@ -228,10 +245,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   iconBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(0, 108, 73, 0.1)',
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#D1FAE5',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -239,14 +256,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
-    color: '#1E293B',
+    color: ThemeColors.text,
   },
   subtitle: {
     fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
+    color: ThemeColors.textSecondary,
+    marginTop: 1,
   },
   sensorTogglePill: {
     flexDirection: 'row',
@@ -258,17 +275,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   sensorActivePill: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
+    backgroundColor: '#ABF1CF',
+    borderColor: '#6EE7B7',
   },
   sensorInactivePill: {
     backgroundColor: '#F8FAFC',
     borderColor: '#E2E8F0',
   },
   pulseDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   sensorToggleText: {
     fontSize: 11,
@@ -277,44 +294,46 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
+    gap: 8,
   },
   metricBox: {
     flex: 1,
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    marginHorizontal: 4,
-    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 6,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   axisLabel: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 4,
+    fontSize: 11,
+    color: ThemeColors.textSecondary,
+    marginBottom: 2,
     fontWeight: '600',
   },
   axisValue: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#0F172A',
+    color: ThemeColors.text,
+    fontVariant: ['tabular-nums'],
   },
   axisHint: {
     fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 2,
+    color: ThemeColors.textMuted,
+    marginTop: 1,
   },
   statusBox: {
-    padding: 12,
-    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
   },
   alertSafe: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
   },
   alertWarning: {
     backgroundColor: '#FFFBEB',
@@ -322,39 +341,43 @@ const styles = StyleSheet.create({
   },
   alertDanger: {
     backgroundColor: '#FEF2F2',
-    borderColor: '#FCA5A5',
+    borderColor: '#FECACA',
   },
   statusHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
   },
   statusText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
   },
   textSafe: {
-    color: '#16A34A',
+    color: '#005139',
   },
   textWarning: {
-    color: '#D97706',
+    color: '#B45309',
   },
   textDanger: {
-    color: '#DC2626',
+    color: '#B91C1C',
   },
   forceSubtext: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 4,
+    fontSize: 11.5,
+    color: ThemeColors.textSecondary,
+    marginTop: 3,
     textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
     marginTop: 10,
-    paddingTop: 10,
+    paddingTop: 9,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
@@ -363,11 +386,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     flex: 1,
+    minWidth: 160,
   },
   footerInfoText: {
     fontSize: 11,
     color: ThemeColors.textSecondary,
     fontWeight: '500',
+    flexShrink: 1,
   },
   simulateButton: {
     flexDirection: 'row',
@@ -376,13 +401,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0, 108, 73, 0.08)',
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: 'rgba(0, 108, 73, 0.25)',
+    borderColor: '#A7F3D0',
   },
   simulateButtonText: {
     fontSize: 11,
     fontWeight: '700',
-    color: ThemeColors.primary,
+    color: ThemeColors.primaryContainer,
   },
 });

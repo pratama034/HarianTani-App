@@ -7,20 +7,25 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { ThemeColors, Radius, Spacing, Shadows } from '../../constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ThemeColors, Radius, Spacing } from '../../constants/theme';
 import { useAppContext } from '../../context/AppContext';
+import { scheduleJadwalNotification } from '../../services/notifications';
 import { AppCard } from '../../components/AppCard';
-import { DarkSummaryCard } from '../../components/DarkSummaryCard';
+import { FormModal } from '../../components/FormModal';
 import { FormInput } from '../../components/FormInput';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
 
-type FilterType = 'Semua' | 'Hari Ini' | 'Selesai';
+type FilterType = 'Semua' | 'Hari Ini' | 'Tertunda' | 'Selesai';
 
 export default function JadwalScreen() {
+  const insets = useSafeAreaInsets();
   const {
     jadwalList,
     lahanList,
@@ -33,8 +38,10 @@ export default function JadwalScreen() {
     isSimulationActive,
     refetchAll,
   } = useAppContext();
+
   const [filter, setFilter] = useState<FilterType>('Semua');
   const [selectedParcelId, setSelectedParcelId] = useState<string>('all');
+  const [selectedDay, setSelectedDay] = useState<string>('12');
   const [isAdding, setIsAdding] = useState(false);
 
   const [waktu, setWaktu] = useState('');
@@ -61,12 +68,22 @@ export default function JadwalScreen() {
 
     setIsSubmitting(true);
     try {
+      const targetLahan = lahanList.find((l) => l.id === selectedLahanId);
+
       await addJadwal({
         idLahan: selectedLahanId,
         tanggal: todayStr,
         waktu: waktu.trim(),
         kegiatan: kegiatan.trim(),
       });
+
+      // Jadwalkan notifikasi lokal pengingat otomatis pukul 06:00 WIB
+      await scheduleJadwalNotification(
+        kegiatan.trim(),
+        todayStr,
+        waktu.trim(),
+        targetLahan?.nama
+      );
 
       setWaktu('');
       setKegiatan('');
@@ -79,45 +96,39 @@ export default function JadwalScreen() {
     }
   };
 
-  // Filter schedules
   const filteredJadwal = jadwalList.filter((j) => {
-    // Filter by parcel
     if (selectedParcelId !== 'all' && j.idLahan !== selectedParcelId) {
       return false;
     }
-    // Filter by status tab
     if (filter === 'Hari Ini') return j.tanggal === todayStr;
+    if (filter === 'Tertunda') return !j.selesai;
     if (filter === 'Selesai') return j.selesai;
-    return true; // Semua
+    return true;
   });
 
+  const totalHariIni = jadwalList.filter((j) => j.tanggal === todayStr).length;
+  const totalTertunda = jadwalList.filter((j) => !j.selesai).length;
   const totalSelesai = jadwalList.filter((j) => j.selesai).length;
-  const persenSiap =
-    jadwalList.length > 0
-      ? Math.round((totalSelesai / jadwalList.length) * 100)
-      : 100;
 
-  // Weekly Date Strip mock
   const weekDays = [
-    { day: 'Sen', date: '12', active: true },
-    { day: 'Sel', date: '13', active: false },
-    { day: 'Rab', date: '14', active: false },
-    { day: 'Kam', date: '15', active: false },
-    { day: 'Jum', date: '16', active: false },
-    { day: 'Sab', date: '17', active: false },
-    { day: 'Min', date: '18', active: false },
+    { day: 'Sen', date: '12', hasEvent: true },
+    { day: 'Sel', date: '13', hasEvent: true },
+    { day: 'Rab', date: '14', hasEvent: false },
+    { day: 'Kam', date: '15', hasEvent: true },
+    { day: 'Jum', date: '16', hasEvent: true },
+    { day: 'Sab', date: '17', hasEvent: false },
+    { day: 'Min', date: '18', hasEvent: false },
   ];
 
   if (isLoading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={ThemeColors.primary} />
-        <Text style={styles.loadingText}>Memuat jadwal perawatan dari REST API...</Text>
+        <ActivityIndicator size="large" color={ThemeColors.primaryContainer} />
+        <Text style={styles.loadingText}>Memuat jadwal perawatan...</Text>
       </View>
     );
   }
 
-  // Error / Offline / Timeout Full Screen State (Tampil saat simulasi aktif atau jika data kosong dan terjadi error)
   if (error && (isSimulationActive || jadwalList.length === 0)) {
     return (
       <ScrollView
@@ -127,13 +138,19 @@ export default function JadwalScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[ThemeColors.primary]}
-            tintColor={ThemeColors.primary}
+            colors={[ThemeColors.primaryContainer]}
+            tintColor={ThemeColors.primaryContainer}
           />
         }
       >
         <ErrorState
-          type={apiStatus === 'offline' ? 'offline' : apiStatus === 'timeout' ? 'timeout' : 'error'}
+          type={
+            apiStatus === 'offline'
+              ? 'offline'
+              : apiStatus === 'timeout'
+                ? 'timeout'
+                : 'error'
+          }
           statusCode={statusCode}
           message={error}
           onRetry={onRefresh}
@@ -144,89 +161,83 @@ export default function JadwalScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={[ThemeColors.primary]}
-          tintColor={ThemeColors.primary}
-        />
-      }
+    <KeyboardAvoidingView
+      style={styles.keyboardContainer}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-
-      {/* Top AI Smart Agronomy Dark Pod */}
-      <DarkSummaryCard style={styles.summaryPod}>
-        <View style={styles.summaryTopRow}>
-          <View style={styles.aiTag}>
-            <MaterialCommunityIcons
-              name="cloud-check"
-              size={13}
-              color={ThemeColors.secondaryFixed}
-            />
-            <Text style={styles.aiTagText}>🟢 Cloud REST API Active</Text>
-          </View>
-          <Text style={styles.monthTagText}>Musim Tanam 2026</Text>
-        </View>
-
-        <View style={styles.summaryMainRow}>
-          <View>
-            <Text style={styles.summaryPodTitle}>Jadwal Perawatan</Text>
-            <Text style={styles.summaryPodSubtitle}>
-              {totalSelesai} dari {jadwalList.length} tugas telah selesai
-            </Text>
-          </View>
-          <View style={styles.percentCol}>
-            <Text style={styles.percentText}>{persenSiap}%</Text>
-            <Text style={styles.percentLabel}>SELESAI</Text>
-          </View>
-        </View>
-
-        {/* Progress Pill Bar */}
-        <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${Math.min(100, Math.max(8, persenSiap))}%` },
-            ]}
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingBottom: Math.max(insets.bottom, 16) + 28,
+          },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[ThemeColors.primaryContainer]}
+            tintColor={ThemeColors.primaryContainer}
+          />
+        }
+      >
+      {/* Network Error Alert Banner saat data terakhir di memori dipertahankan */}
+      {error && jadwalList.length > 0 && (
+        <View style={{ marginBottom: 14 }}>
+          <ErrorState
+            compact
+            type={
+              apiStatus === 'offline'
+                ? 'offline'
+                : apiStatus === 'timeout'
+                  ? 'timeout'
+                  : 'error'
+            }
+            statusCode={statusCode}
+            message={error}
+            onRetry={onRefresh}
+            isRetrying={refreshing}
           />
         </View>
-      </DarkSummaryCard>
-
-      {/* Horizontal Weekly Date Strip */}
-      <View style={styles.weekSection}>
-        <View style={styles.weekHeader}>
-          <View style={styles.weekTitleRow}>
-            <MaterialCommunityIcons
-              name="calendar-month-outline"
-              size={16}
-              color={ThemeColors.primary}
-            />
-            <Text style={styles.weekTitle}>Pekan Ini</Text>
-          </View>
-          <Text style={styles.weekSub}>Hari Ini Aktif</Text>
+      )}
+      {/* 1. Greeting & Quick Stats Header (Modern Agritech Precision) */}
+      <View style={styles.headerRow}>
+        <View>
+          <Text style={styles.monthTagText}>MUSIM TANAM 2026</Text>
+          <Text style={styles.pageTitle}>Jadwal Perawatan</Text>
         </View>
+        <View style={styles.weekPill}>
+          <MaterialCommunityIcons
+            name="calendar-clock"
+            size={16}
+            color="#006C49"
+          />
+          <Text style={styles.weekPillText}>Pekan Aktif</Text>
+        </View>
+      </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.dateStrip}
-        >
-          {weekDays.map((item) => (
-            <View
+      {/* 2. Horizontal Weekly Calendar Selector */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.dateStrip}
+      >
+        {weekDays.map((item) => {
+          const isActive = selectedDay === item.date;
+          return (
+            <TouchableOpacity
               key={item.day}
-              style={[
-                styles.dateChip,
-                item.active && styles.dateChipActive,
-              ]}
+              style={[styles.dateChip, isActive && styles.dateChipActive]}
+              onPress={() => setSelectedDay(item.date)}
+              activeOpacity={0.85}
             >
               <Text
                 style={[
                   styles.dateChipDay,
-                  item.active && styles.dateChipDayActive,
+                  isActive && styles.dateChipDayActive,
                 ]}
               >
                 {item.day}
@@ -234,18 +245,102 @@ export default function JadwalScreen() {
               <Text
                 style={[
                   styles.dateChipDate,
-                  item.active && styles.dateChipDateActive,
+                  isActive && styles.dateChipDateActive,
                 ]}
               >
                 {item.date}
               </Text>
-              {item.active && <View style={styles.activeDateDot} />}
+              <View
+                style={[
+                  styles.dateEventDot,
+                  isActive
+                    ? { backgroundColor: '#6CF8BB' }
+                    : item.hasEvent
+                      ? { backgroundColor: '#DAE2FD' }
+                      : { backgroundColor: 'transparent' },
+                ]}
+              />
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* 3. Field Weather Micro-Widget (Agronomic Advisory) */}
+      <View style={styles.weatherMicroWidget}>
+        <View style={styles.weatherMicroLeft}>
+          <View style={styles.weatherMicroIconBox}>
+            <MaterialCommunityIcons
+              name="weather-partly-cloudy"
+              size={24}
+              color="#006C49"
+            />
+          </View>
+          <View>
+            <View style={styles.weatherTempRow}>
+              <Text style={styles.weatherTempTitle}>28°C</Text>
+              <View style={styles.weatherInlineDot} />
+              <Text style={styles.weatherConditionText}>Cerah Berawan</Text>
             </View>
-          ))}
-        </ScrollView>
+            <View style={styles.weatherSprayRow}>
+              <MaterialCommunityIcons
+                name="leaf"
+                size={13}
+                color="#00714D"
+              />
+              <Text style={styles.weatherSprayText}>
+                Semprot optimal: {'<'} 09:30 WIB
+              </Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.weatherInfoCircle}>
+          <MaterialCommunityIcons
+            name="information-outline"
+            size={16}
+            color="#00442F"
+          />
+        </View>
       </View>
 
-      {/* Parcel Selector Filter Chips */}
+      {/* 4. Task Category Filter Chips */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterChipsRow}
+      >
+        {(
+          [
+            { key: 'Semua', label: `Semua (${jadwalList.length})` },
+            { key: 'Hari Ini', label: `Hari Ini (${totalHariIni})` },
+            { key: 'Tertunda', label: `Tertunda (${totalTertunda})` },
+            { key: 'Selesai', label: `Selesai (${totalSelesai})` },
+          ] as { key: FilterType; label: string }[]
+        ).map((tab) => {
+          const isActive = filter === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[
+                styles.categoryChip,
+                isActive && styles.categoryChipActive,
+              ]}
+              onPress={() => setFilter(tab.key)}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.categoryChipText,
+                  isActive && styles.categoryChipTextActive,
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* Parcel Filter Chips */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -259,41 +354,28 @@ export default function JadwalScreen() {
           onPress={() => setSelectedParcelId('all')}
           activeOpacity={0.8}
         >
-          <MaterialCommunityIcons
-            name="sprout"
-            size={16}
-            color={
-              selectedParcelId === 'all'
-                ? ThemeColors.onPrimary
-                : ThemeColors.primary
-            }
-          />
           <Text
             style={[
               styles.parcelChipText,
               selectedParcelId === 'all' && styles.parcelChipTextActive,
             ]}
           >
-            Semua Lahan
+            Semua Petak
           </Text>
         </TouchableOpacity>
-
         {lahanList.map((lahan) => {
-          const isSelected = selectedParcelId === lahan.id;
+          const active = selectedParcelId === lahan.id;
           return (
             <TouchableOpacity
               key={lahan.id}
-              style={[
-                styles.parcelChip,
-                isSelected && styles.parcelChipActive,
-              ]}
+              style={[styles.parcelChip, active && styles.parcelChipActive]}
               onPress={() => setSelectedParcelId(lahan.id)}
               activeOpacity={0.8}
             >
               <Text
                 style={[
                   styles.parcelChipText,
-                  isSelected && styles.parcelChipTextActive,
+                  active && styles.parcelChipTextActive,
                 ]}
               >
                 {lahan.nama}
@@ -303,296 +385,306 @@ export default function JadwalScreen() {
         })}
       </ScrollView>
 
-      {/* Status Filter Segmented Control & Add Button */}
-      <View style={styles.filterAndActionRow}>
-        <View style={styles.segmentedControl}>
-          {(['Semua', 'Hari Ini', 'Selesai'] as FilterType[]).map((f) => {
-            const isActive = filter === f;
+      {/* 5. Section Heading: Agenda Perawatan */}
+      <View style={styles.agendaHeadingRow}>
+        <Text style={styles.agendaHeadingTitle}>Agenda Perawatan</Text>
+        <Text style={styles.agendaHeadingDate}>
+          {selectedDay} Okt • Hari Ini
+        </Text>
+      </View>
+
+      {/* 6. Task Cards List */}
+      {filteredJadwal.length === 0 ? (
+        <AppCard style={styles.emptyCard}>
+          <EmptyState
+            iconName="calendar-check-outline"
+            title="Tidak Ada Jadwal pada Filter Ini"
+            description="Tambahkan jadwal perawatan baru atau ubah filter kategori."
+          />
+        </AppCard>
+      ) : (
+        <View style={styles.tasksStack}>
+          {filteredJadwal.map((jadwal) => {
+            const lahan = lahanList.find((l) => l.id === jadwal.idLahan);
+            return (
+              <View
+                key={jadwal.id}
+                style={[
+                  styles.taskCard,
+                  !jadwal.selesai && styles.taskCardPriority,
+                ]}
+              >
+                {!jadwal.selesai && <View style={styles.priorityLeftStrip} />}
+
+                {/* Top Metadata & Status */}
+                <View style={styles.taskTopMetaRow}>
+                  <View style={styles.taskMetaLeft}>
+                    <View
+                      style={[
+                        styles.timeBadge,
+                        !jadwal.selesai && styles.timeBadgeUrgent,
+                      ]}
+                    >
+                      {!jadwal.selesai && (
+                        <MaterialCommunityIcons
+                          name="alarm"
+                          size={12}
+                          color="#93000A"
+                        />
+                      )}
+                      <Text
+                        style={[
+                          styles.timeBadgeText,
+                          !jadwal.selesai && styles.timeBadgeTextUrgent,
+                        ]}
+                      >
+                        {jadwal.waktu} WIB
+                      </Text>
+                    </View>
+
+                    <View style={styles.locationInline}>
+                      <MaterialCommunityIcons
+                        name="map-marker-outline"
+                        size={14}
+                        color={ThemeColors.textSecondary}
+                      />
+                      <Text style={styles.locationInlineText} numberOfLines={1}>
+                        {lahan?.nama || 'Blok Sawah Barat'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {jadwal.selesai ? (
+                    <View style={styles.statusPillDone}>
+                      <MaterialCommunityIcons
+                        name="check-decagram"
+                        size={13}
+                        color="#00714D"
+                      />
+                      <Text style={styles.statusPillDoneText}>Selesai</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.statusPillPriority}>
+                      <Text style={styles.statusPillPriorityText}>
+                        PRIORITAS
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Task Body */}
+                <View style={styles.taskBodyRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.checkboxSquare,
+                      jadwal.selesai && styles.checkboxSquareChecked,
+                    ]}
+                    onPress={() => toggleJadwalSelesai(jadwal.id)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Centang tugas ${jadwal.kegiatan}`}
+                  >
+                    {jadwal.selesai && (
+                      <MaterialCommunityIcons
+                        name="check"
+                        size={16}
+                        color="#FFFFFF"
+                      />
+                    )}
+                  </TouchableOpacity>
+
+                  <View style={styles.taskBodyTextCol}>
+                    <Text
+                      style={[
+                        styles.taskCardTitle,
+                        jadwal.selesai && styles.taskCardTitleDone,
+                      ]}
+                    >
+                      {jadwal.kegiatan}
+                    </Text>
+                    <Text style={styles.taskCardDesc}>
+                      {jadwal.selesai
+                        ? `Telah diselesaikan pada petak ${lahan?.nama || 'Lahan Utama'}.`
+                        : `Pastikan dosis dan prosedur perawatan sesuai standar agronomi pada ${lahan?.nama || 'Lahan Utama'}.`}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Inline Visual Footer */}
+                <View style={styles.taskFooterStrip}>
+                  <View style={styles.taskFooterLeft}>
+                    <MaterialCommunityIcons
+                      name={
+                        jadwal.selesai
+                          ? 'account-check-outline'
+                          : 'alert-outline'
+                      }
+                      size={15}
+                      color={jadwal.selesai ? '#006C49' : '#BA1A1A'}
+                    />
+                    <Text style={styles.taskFooterLeftText}>
+                      {jadwal.selesai
+                        ? 'Pelaksana: Tim Lapangan'
+                        : 'Batas pengerjaan sore hari'}
+                    </Text>
+                  </View>
+
+                  {jadwal.selesai ? (
+                    <Text style={styles.taskFooterRightDone}>
+                      Tuntas {jadwal.waktu} WIB
+                    </Text>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.startNowPillBtn}
+                      onPress={() => toggleJadwalSelesai(jadwal.id)}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons
+                        name="play"
+                        size={13}
+                        color="#00442F"
+                      />
+                      <Text style={styles.startNowPillText}>
+                        Tandai Selesai
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* 7. Agritech Field Note Banner */}
+      <View style={styles.fieldTipBanner}>
+        <MaterialCommunityIcons
+          name="lightbulb-on-outline"
+          size={22}
+          color="#006C49"
+        />
+        <Text style={styles.fieldTipText}>
+          Penyemprotan pagi hari meningkatkan penyerapan stomata tanaman padi
+          hingga 40% lebih efektif.
+        </Text>
+      </View>
+
+      <View style={{ height: 40 }} />
+      </ScrollView>
+
+      {/* Floating Action Button (FAB) */}
+      <TouchableOpacity
+        style={[
+          styles.fabButton,
+          { bottom: Math.max(insets.bottom, 16) + 16 },
+        ]}
+        onPress={() => {
+          setIsAdding(true);
+          setFormError(null);
+        }}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Tambah jadwal tugas baru"
+      >
+        <MaterialCommunityIcons name="plus" size={28} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      {/* Form Modal (Progressive Disclosure Bottom Sheet) */}
+      <FormModal
+        visible={isAdding}
+        onClose={() => {
+          setIsAdding(false);
+          setFormError(null);
+        }}
+        title="Buat Jadwal Tugas Baru"
+        subtitle="Agenda perawatan tanaman lapangan"
+        iconName="calendar-plus"
+      >
+        {formError && (
+          <View style={styles.errorBox}>
+            <MaterialCommunityIcons
+              name="alert-circle"
+              size={16}
+              color={ThemeColors.loss}
+            />
+            <Text style={styles.errorBoxText}>{formError}</Text>
+          </View>
+        )}
+
+        <Text style={styles.fieldLabel}>Pilih Petak Lahan</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.lahanSelectRow}
+        >
+          {lahanList.map((lahan) => {
+            const selected = selectedLahanId === lahan.id;
             return (
               <TouchableOpacity
-                key={f}
+                key={lahan.id}
                 style={[
-                  styles.segmentBtn,
-                  isActive && styles.segmentBtnActive,
+                  styles.lahanSelectChip,
+                  selected && styles.lahanSelectChipActive,
                 ]}
-                onPress={() => setFilter(f)}
-                activeOpacity={0.8}
+                onPress={() => setSelectedLahanId(lahan.id)}
               >
                 <Text
                   style={[
-                    styles.segmentBtnText,
-                    isActive && styles.segmentBtnTextActive,
+                    styles.lahanSelectText,
+                    selected && styles.lahanSelectTextActive,
                   ]}
                 >
-                  {f}
+                  {lahan.nama}
                 </Text>
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
 
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => {
-            setIsAdding(!isAdding);
-            setFormError(null);
-          }}
-          activeOpacity={0.85}
-        >
-          <MaterialCommunityIcons
-            name={isAdding ? 'close' : 'plus'}
-            size={18}
-            color={ThemeColors.onPrimary}
-          />
-        </TouchableOpacity>
-      </View>
+        <FormInput
+          label="Waktu Pelaksanaan (WIB)"
+          placeholder="cth: 07:00 atau 16:00"
+          value={waktu}
+          onChangeText={setWaktu}
+          leftIcon={
+            <MaterialCommunityIcons
+              name="clock-outline"
+              size={18}
+              color={ThemeColors.textMuted}
+            />
+          }
+        />
 
-      {/* Collapsible Add Schedule Form */}
-      {isAdding && (
-        <AppCard style={styles.formCard}>
-          <Text style={styles.formTitle}>Tambah Jadwal Perawatan (Hari Ini)</Text>
+        <FormInput
+          label="Nama Kegiatan Perawatan"
+          placeholder="cth: Pemberian Pupuk Urea & NPK"
+          value={kegiatan}
+          onChangeText={setKegiatan}
+          leftIcon={
+            <MaterialCommunityIcons
+              name="clipboard-text-outline"
+              size={18}
+              color={ThemeColors.textMuted}
+            />
+          }
+        />
 
-          {formError && (
-            <View style={styles.errorBox}>
-              <MaterialCommunityIcons
-                name="alert-circle"
-                size={16}
-                color={ThemeColors.loss}
-              />
-              <Text style={styles.errorBoxText}>{formError}</Text>
-            </View>
-          )}
-
-          <Text style={styles.inputLabel}>Pilih Lahan Target</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.lahanSelectorRow}
-          >
-            {lahanList.map((lahan) => {
-              const isSelected = selectedLahanId === lahan.id;
-              return (
-                <TouchableOpacity
-                  key={lahan.id}
-                  style={[
-                    styles.lahanSelectChip,
-                    isSelected && styles.lahanSelectChipSelected,
-                  ]}
-                  onPress={() => setSelectedLahanId(lahan.id)}
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[
-                      styles.lahanSelectChipText,
-                      isSelected && styles.lahanSelectChipTextSelected,
-                    ]}
-                  >
-                    {lahan.nama}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          <FormInput
-            label="Waktu Kegiatan"
-            placeholder="contoh: 07:00 atau 16:30"
-            value={waktu}
-            onChangeText={setWaktu}
-            leftIcon={
-              <MaterialCommunityIcons
-                name="clock-outline"
-                size={18}
-                color={ThemeColors.textMuted}
-              />
-            }
-          />
-
-          <FormInput
-            label="Nama Kegiatan Perawatan"
-            placeholder="contoh: Penyiraman Air & Pupuk Cair NPK"
-            value={kegiatan}
-            onChangeText={setKegiatan}
-            leftIcon={
-              <MaterialCommunityIcons
-                name="watering-can-outline"
-                size={18}
-                color={ThemeColors.textMuted}
-              />
-            }
-          />
-
-          <PrimaryButton
-            title="Simpan Jadwal"
-            onPress={handleAdd}
-            loading={isSubmitting}
-            disabled={isSubmitting}
-            leftIcon={
-              <MaterialCommunityIcons
-                name="calendar-check"
-                size={18}
-                color={ThemeColors.onPrimary}
-              />
-            }
-            style={styles.submitBtn}
-          />
-        </AppCard>
-      )}
-
-      {/* Task List / Timeline Cards */}
-      {filteredJadwal.length === 0 ? (
-        <AppCard style={styles.emptyCard}>
-          <EmptyState
-            iconName="calendar-blank-outline"
-            title="Tidak Ada Jadwal Perawatan"
-            description="Tidak ada tugas perawatan yang cocok dengan filter yang dipilih."
-            action={
-              <PrimaryButton
-                title="+ Tambah Jadwal Baru"
-                onPress={() => setIsAdding(true)}
-              />
-            }
-          />
-        </AppCard>
-      ) : (
-        <View style={styles.timelineList}>
-          {filteredJadwal.map((jadwal) => {
-            const lahan = lahanList.find((l) => l.id === jadwal.idLahan);
-
-            return (
-              <AppCard key={jadwal.id} style={styles.taskCard}>
-                <View style={styles.taskCardRow}>
-                  {/* Pin Status Icon */}
-                  <View
-                    style={[
-                      styles.taskIconPin,
-                      jadwal.selesai
-                        ? styles.taskIconPinDone
-                        : styles.taskIconPinPending,
-                    ]}
-                  >
-                    <MaterialCommunityIcons
-                      name={
-                        jadwal.selesai ? 'check-circle' : 'clock-alert-outline'
-                      }
-                      size={20}
-                      color={
-                        jadwal.selesai
-                          ? ThemeColors.profit
-                          : ThemeColors.warning
-                      }
-                    />
-                  </View>
-
-                  {/* Task Details */}
-                  <View style={styles.taskDetailCol}>
-                    <View style={styles.taskMetaRow}>
-                      <View style={styles.timeBadge}>
-                        <MaterialCommunityIcons
-                          name="clock-outline"
-                          size={13}
-                          color={ThemeColors.primary}
-                        />
-                        <Text style={styles.timeBadgeText}>
-                          {jadwal.waktu} WIB
-                        </Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          jadwal.selesai
-                            ? styles.statusBadgeDone
-                            : styles.statusBadgePending,
-                        ]}
-                      >
-                        <View
-                          style={[
-                            styles.statusDot,
-                            {
-                              backgroundColor: jadwal.selesai
-                                ? ThemeColors.profit
-                                : ThemeColors.warning,
-                            },
-                          ]}
-                        />
-                        <Text
-                          style={[
-                            styles.statusBadgeText,
-                            {
-                              color: jadwal.selesai
-                                ? ThemeColors.profit
-                                : ThemeColors.warning,
-                            },
-                          ]}
-                        >
-                          {jadwal.selesai ? 'Selesai' : 'Menunggu'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <Text style={styles.taskTitle}>{jadwal.kegiatan}</Text>
-
-                    <View style={styles.parcelInfoRow}>
-                      <MaterialCommunityIcons
-                        name="sprout"
-                        size={15}
-                        color={ThemeColors.primary}
-                      />
-                      <Text style={styles.parcelInfoText}>
-                        {lahan?.nama || 'Lahan Tidak Diketahui'} •{' '}
-                        {lahan?.tanaman || 'Tanaman'}
-                      </Text>
-                    </View>
-
-                    {/* Action Mark Button */}
-                    <View style={styles.taskActionRow}>
-                      <TouchableOpacity
-                        style={[
-                          styles.toggleActionBtn,
-                          jadwal.selesai && styles.toggleActionBtnDone,
-                        ]}
-                        onPress={() => toggleJadwalSelesai(jadwal.id)}
-                        activeOpacity={0.85}
-                      >
-                        <MaterialCommunityIcons
-                          name={
-                            jadwal.selesai
-                              ? 'check-circle-outline'
-                              : 'checkbox-marked-circle'
-                          }
-                          size={16}
-                          color={
-                            jadwal.selesai
-                              ? ThemeColors.textSecondary
-                              : ThemeColors.onPrimary
-                          }
-                        />
-                        <Text
-                          style={[
-                            styles.toggleActionBtnText,
-                            jadwal.selesai && styles.toggleActionBtnTextDone,
-                          ]}
-                        >
-                          {jadwal.selesai
-                            ? 'Batal Selesai'
-                            : 'Tandai Selesai'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              </AppCard>
-            );
-          })}
-        </View>
-      )}
-
-      <View style={{ height: 24 }} />
-    </ScrollView>
+        <PrimaryButton
+          title="Simpan Jadwal Perawatan"
+          onPress={handleAdd}
+          loading={isSubmitting}
+          disabled={isSubmitting}
+        />
+      </FormModal>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardContainer: {
+    flex: 1,
+    backgroundColor: ThemeColors.background,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -611,122 +703,60 @@ const styles = StyleSheet.create({
     backgroundColor: ThemeColors.background,
   },
   scrollContent: {
-    padding: Spacing.margin,
-    paddingTop: Spacing.sm,
+    paddingHorizontal: Spacing.margin,
+    paddingTop: Spacing.md,
+    paddingBottom: 28,
   },
-  summaryPod: {
-    marginBottom: Spacing.md,
-    padding: Spacing.lg,
-  },
-  summaryTopRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
-  },
-  aiTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-  },
-  aiTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: ThemeColors.secondaryFixed,
-    marginLeft: 5,
+    marginBottom: 12,
   },
   monthTagText: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.65)',
-  },
-  summaryMainRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    marginTop: 6,
-    marginBottom: 10,
-  },
-  summaryPodTitle: {
-    fontSize: 20,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: ThemeColors.onDark,
-    letterSpacing: -0.3,
+    color: '#006C49',
+    letterSpacing: 0.6,
   },
-  summaryPodSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.75)',
-    marginTop: 2,
-  },
-  percentCol: {
-    alignItems: 'flex-end',
-  },
-  percentText: {
+  pageTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: ThemeColors.secondaryFixed,
-  },
-  percentLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: 'rgba(255, 255, 255, 0.55)',
-    letterSpacing: 0.5,
-  },
-  progressTrack: {
-    width: '100%',
-    height: 6,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: ThemeColors.secondaryFixed,
-    borderRadius: Radius.full,
-  },
-  weekSection: {
-    marginBottom: Spacing.md,
-  },
-  weekHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.xs + 2,
-  },
-  weekTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  weekTitle: {
-    fontSize: 13,
-    fontWeight: '700',
     color: ThemeColors.text,
-    marginLeft: 5,
+    marginTop: 2,
   },
-  weekSub: {
-    fontSize: 11,
-    color: ThemeColors.primary,
-    fontWeight: '600',
+  weekPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: ThemeColors.surfaceHigh,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    gap: 5,
+  },
+  weekPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: ThemeColors.primaryDark,
   },
   dateStrip: {
-    flexDirection: 'row',
     gap: 8,
-    paddingVertical: 2,
+    paddingVertical: 4,
+    marginBottom: 14,
   },
   dateChip: {
-    width: 52,
-    height: 70,
-    borderRadius: Radius.md,
-    backgroundColor: ThemeColors.surface,
+    width: 50,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadows.subtle,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   dateChipActive: {
-    backgroundColor: ThemeColors.primary,
-    ...Shadows.button,
+    backgroundColor: '#135D43',
+    borderColor: '#135D43',
   },
   dateChipDay: {
     fontSize: 11,
@@ -734,270 +764,401 @@ const styles = StyleSheet.create({
     color: ThemeColors.textSecondary,
   },
   dateChipDayActive: {
-    color: 'rgba(255, 255, 255, 0.85)',
+    color: 'rgba(255, 255, 255, 0.90)',
   },
   dateChipDate: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     color: ThemeColors.text,
-    marginTop: 2,
+    marginVertical: 2,
   },
   dateChipDateActive: {
-    color: ThemeColors.onPrimary,
+    color: '#FFFFFF',
   },
-  activeDateDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: ThemeColors.secondaryFixed,
-    marginTop: 4,
+  dateEventDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 2,
   },
-  parcelChipsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: Spacing.md,
-    paddingVertical: 2,
-  },
-  parcelChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 40,
-    paddingHorizontal: 14,
-    borderRadius: Radius.full,
-    backgroundColor: ThemeColors.surface,
+  weatherMicroWidget: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: ThemeColors.border,
-  },
-  parcelChipActive: {
-    backgroundColor: ThemeColors.primary,
-    borderColor: ThemeColors.primary,
-  },
-  parcelChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: ThemeColors.text,
-    marginLeft: 5,
-  },
-  parcelChipTextActive: {
-    color: ThemeColors.onPrimary,
-  },
-  filterAndActionRow: {
+    borderColor: '#E2E8F0',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.md,
-    gap: Spacing.sm,
+    marginBottom: 14,
   },
-  segmentedControl: {
-    flex: 1,
+  weatherMicroLeft: {
     flexDirection: 'row',
-    backgroundColor: ThemeColors.surfaceHigh,
-    padding: 3,
-    borderRadius: Radius.full,
-  },
-  segmentBtn: {
+    alignItems: 'center',
+    gap: 12,
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
+  },
+  weatherMicroIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  segmentBtnActive: {
-    backgroundColor: ThemeColors.surface,
-    ...Shadows.subtle,
+  weatherTempRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  segmentBtnText: {
+  weatherTempTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: ThemeColors.text,
+  },
+  weatherInlineDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: ThemeColors.textMuted,
+  },
+  weatherConditionText: {
     fontSize: 12,
     fontWeight: '600',
     color: ThemeColors.textSecondary,
   },
-  segmentBtnTextActive: {
-    color: ThemeColors.primary,
-    fontWeight: '700',
+  weatherSprayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
   },
-  addButton: {
-    width: 42,
-    height: 42,
+  weatherSprayText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#00714D',
+  },
+  weatherInfoCircle: {
+    width: 28,
+    height: 28,
     borderRadius: Radius.full,
-    backgroundColor: ThemeColors.primary,
+    backgroundColor: 'rgba(108, 248, 187, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadows.button,
   },
-  formCard: {
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
+  filterChipsRow: {
+    gap: 8,
+    paddingBottom: 8,
   },
-  formTitle: {
-    fontSize: 16,
+  categoryChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+    backgroundColor: ThemeColors.surfaceContainer,
+  },
+  categoryChipActive: {
+    backgroundColor: '#135D43',
+  },
+  categoryChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: ThemeColors.textSecondary,
+  },
+  categoryChipTextActive: {
+    color: '#FFFFFF',
     fontWeight: '700',
-    color: ThemeColors.text,
-    marginBottom: Spacing.sm,
+  },
+  parcelChipsRow: {
+    gap: 8,
+    paddingBottom: 14,
+  },
+  parcelChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: ThemeColors.border,
+  },
+  parcelChipActive: {
+    backgroundColor: '#ABF1CF',
+    borderColor: '#6EE7B7',
+  },
+  parcelChipText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: ThemeColors.textSecondary,
+  },
+  parcelChipTextActive: {
+    color: '#005139',
+    fontWeight: '700',
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFEBEE',
+    backgroundColor: '#FEF2F2',
     padding: 10,
-    borderRadius: Radius.md,
-    marginBottom: Spacing.md,
+    borderRadius: 10,
+    marginBottom: 12,
+    gap: 6,
   },
   errorBoxText: {
     fontSize: 12,
     color: ThemeColors.loss,
     fontWeight: '600',
-    marginLeft: 6,
+    flex: 1,
   },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: ThemeColors.text,
-    marginBottom: Spacing.xs,
-  },
-  lahanSelectorRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: Spacing.md,
-  },
-  lahanSelectChip: {
-    backgroundColor: ThemeColors.surfaceLow,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: ThemeColors.border,
-  },
-  lahanSelectChipSelected: {
-    backgroundColor: ThemeColors.primary,
-    borderColor: ThemeColors.primary,
-  },
-  lahanSelectChipText: {
+  fieldLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: ThemeColors.text,
+    marginBottom: 6,
   },
-  lahanSelectChipTextSelected: {
-    color: ThemeColors.onPrimary,
+  lahanSelectRow: {
+    gap: 8,
+    marginBottom: 14,
   },
-  submitBtn: {
-    marginTop: Spacing.xs,
+  lahanSelectChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+    backgroundColor: ThemeColors.surfaceLow,
   },
-  emptyCard: {
-    padding: Spacing.md,
+  lahanSelectChipActive: {
+    backgroundColor: '#135D43',
   },
-  timelineList: {
-    gap: Spacing.sm,
+  lahanSelectText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: ThemeColors.textSecondary,
   },
-  taskCard: {
-    padding: Spacing.md,
+  lahanSelectTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
-  taskCardRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  taskIconPin: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.md,
-  },
-  taskIconPinDone: {
-    backgroundColor: ThemeColors.surfaceTintGreen,
-  },
-  taskIconPinPending: {
-    backgroundColor: '#FFF3E0',
-  },
-  taskDetailCol: {
-    flex: 1,
-  },
-  taskMetaRow: {
+  agendaHeadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 10,
+  },
+  agendaHeadingTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: ThemeColors.text,
+  },
+  agendaHeadingDate: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: ThemeColors.textSecondary,
+  },
+  emptyCard: {
+    padding: Spacing.xl,
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  tasksStack: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  taskCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  taskCardPriority: {
+    borderColor: 'rgba(0, 108, 73, 0.25)',
+  },
+  priorityLeftStrip: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 5,
+    backgroundColor: ThemeColors.loss,
+  },
+  taskTopMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  taskMetaLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
   },
   timeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: ThemeColors.surfaceTintGreen,
-    paddingHorizontal: 8,
+    backgroundColor: ThemeColors.surfaceHigh,
+    paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: Radius.full,
+    gap: 4,
+  },
+  timeBadgeUrgent: {
+    backgroundColor: ThemeColors.errorContainer,
   },
   timeBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: ThemeColors.primary,
-    marginLeft: 4,
+    color: ThemeColors.text,
   },
-  statusBadge: {
+  timeBadgeTextUrgent: {
+    color: ThemeColors.onErrorContainer,
+  },
+  locationInline: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 3,
+    flex: 1,
+  },
+  locationInlineText: {
+    fontSize: 11,
+    color: ThemeColors.textSecondary,
+  },
+  statusPillDone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(108, 248, 187, 0.30)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    gap: 4,
+  },
+  statusPillDoneText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#00714D',
+  },
+  statusPillPriority: {
+    backgroundColor: 'rgba(255, 218, 214, 0.55)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: Radius.full,
   },
-  statusBadgeDone: {
-    backgroundColor: ThemeColors.surfaceTintGreen,
-  },
-  statusBadgePending: {
-    backgroundColor: '#FFF3E0',
-  },
-  statusDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    marginRight: 4,
-  },
-  statusBadgeText: {
+  statusPillPriorityText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: ThemeColors.loss,
+    letterSpacing: 0.4,
   },
-  taskTitle: {
+  taskBodyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 12,
+  },
+  checkboxSquare: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    backgroundColor: ThemeColors.surfaceHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxSquareChecked: {
+    backgroundColor: '#135D43',
+  },
+  taskBodyTextCol: {
+    flex: 1,
+    gap: 3,
+  },
+  taskCardTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: ThemeColors.text,
     lineHeight: 20,
-    marginBottom: 4,
   },
-  parcelInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
+  taskCardTitleDone: {
+    textDecorationLine: 'line-through',
+    fontWeight: '600',
+    color: ThemeColors.textSecondary,
   },
-  parcelInfoText: {
+  taskCardDesc: {
     fontSize: 12,
     color: ThemeColors.textSecondary,
-    marginLeft: 5,
+    lineHeight: 17,
   },
-  taskActionRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    borderTopWidth: 1,
-    borderTopColor: ThemeColors.border,
-    paddingTop: 8,
-  },
-  toggleActionBtn: {
+  taskFooterStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: ThemeColors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(242, 243, 255, 0.65)',
+    marginHorizontal: -15,
+    marginBottom: -15,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+  },
+  taskFooterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  taskFooterLeftText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: ThemeColors.textSecondary,
+  },
+  taskFooterRightDone: {
+    fontSize: 11,
+    color: ThemeColors.textMuted,
+    fontWeight: '500',
+  },
+  startNowPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(171, 241, 207, 0.60)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: Radius.full,
-    ...Shadows.subtle,
+    gap: 4,
   },
-  toggleActionBtnDone: {
-    backgroundColor: ThemeColors.surfaceLow,
-  },
-  toggleActionBtnText: {
-    fontSize: 12,
+  startNowPillText: {
+    fontSize: 11,
     fontWeight: '700',
-    color: ThemeColors.onPrimary,
-    marginLeft: 5,
+    color: '#00442F',
   },
-  toggleActionBtnTextDone: {
+  fieldTipBanner: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  fieldTipText: {
+    flex: 1,
+    fontSize: 12,
     color: ThemeColors.textSecondary,
+    lineHeight: 18,
+  },
+  fabButton: {
+    position: 'absolute',
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#006C49',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    zIndex: 99,
   },
 });

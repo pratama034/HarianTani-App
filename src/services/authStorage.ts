@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type UserProfile = {
   id: string;
@@ -193,18 +194,30 @@ export async function getSession(): Promise<AuthSession | null> {
 }
 
 /**
- * Menghapus sesi aktif dari Secure Storage (Logout).
+ * Menghapus sesi aktif dari Secure Storage dan membersihkan AsyncStorage (Logout).
  */
 export async function clearSession(): Promise<boolean> {
   try {
     await Promise.all([
       deleteStorageItem(STORAGE_KEYS.SESSION),
       deleteAccessToken(),
+      AsyncStorage.clear(),
     ]);
     return true;
-  } catch {
-    console.error('Gagal menghapus sesi autentikasi dari storage.');
+  } catch (err) {
+    console.error('Gagal menghapus sesi autentikasi dari storage:', err);
     return false;
+  }
+}
+
+/**
+ * Membersihkan seluruh cache AsyncStorage secara eksplisit.
+ */
+export async function clearCache(): Promise<void> {
+  try {
+    await AsyncStorage.clear();
+  } catch (err) {
+    console.error('Gagal membersihkan AsyncStorage cache:', err);
   }
 }
 
@@ -218,26 +231,6 @@ async function getStoredUsers(): Promise<StoredUser[]> {
     if (raw) {
       users = JSON.parse(raw) as StoredUser[];
     }
-
-    // Pastikan akun demo Pak Budi tersedia secara default dengan hash terenkripsi
-    const hasDemo = users.some(
-      (u) => u.email.toLowerCase() === 'budi.santoso@tani.id'
-    );
-    if (!hasDemo) {
-      const salt = Crypto.randomUUID();
-      const passwordHash = await hashPassword('PanenMelimpah2025', salt);
-      const demoUser: StoredUser = {
-        id: 'user-budi-santoso-demo',
-        name: 'Budi Santoso',
-        email: 'budi.santoso@tani.id',
-        passwordHash,
-        salt,
-        createdAt: '2026-01-01T00:00:00.000Z',
-      };
-      users.push(demoUser);
-      await writeStorageItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-    }
-
     return users;
   } catch {
     console.error('Gagal membaca daftar pengguna dari storage.');

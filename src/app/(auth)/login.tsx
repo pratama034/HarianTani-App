@@ -7,19 +7,20 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Platform,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeColors, Radius, Spacing, Shadows } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
-import { AppCard } from '../../components/AppCard';
 import { FormInput } from '../../components/FormInput';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { SecondaryButton } from '../../components/SecondaryButton';
-import { DarkSummaryCard } from '../../components/DarkSummaryCard';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { login, isSecureHardwareAvailable } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -53,10 +54,20 @@ export default function LoginScreen() {
     }
   };
 
-  const fillDemoAccount = () => {
-    setEmail('budi.santoso@tani.id');
-    setPassword('PanenMelimpah2025');
-    setErrorMessage(null);
+  const handleBiometricPrompt = () => {
+    Alert.alert(
+      'Autentikasi Biometrik',
+      'Fitur pemindaian biometrik siap digunakan setelah Anda masuk menggunakan email & kata sandi terdaftar.',
+      [{ text: 'Mengerti' }]
+    );
+  };
+
+  const handleForgotPassword = () => {
+    Alert.alert(
+      'Pemulihan Kata Sandi',
+      'Tautan pemulihan kata sandi akan dikirimkan ke alamat email petani terdaftar.',
+      [{ text: 'Mengerti' }]
+    );
   };
 
   return (
@@ -64,39 +75,56 @@ export default function LoginScreen() {
       style={styles.keyboardContainer}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <StatusBar style="light" />
+
+      {/* Top App Bar (Modern Agritech Precision #135D43) */}
+      <View
+        style={[
+          styles.topHeaderBar,
+          {
+            paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 44 : 24) + 8,
+          },
+        ]}
+      >
+        <View style={styles.topHeaderLeft}>
+          <View style={styles.headerBackCircle}>
+            <MaterialCommunityIcons
+              name="leaf"
+              size={20}
+              color="#6CF8BB"
+            />
+          </View>
+          <Text style={styles.topHeaderTitle}>Masuk Akun</Text>
+        </View>
+        <View style={styles.topHeaderProfileCircle}>
+          <MaterialCommunityIcons
+            name="account-outline"
+            size={18}
+            color="#FFFFFF"
+          />
+        </View>
+      </View>
+
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingBottom: Math.max(insets.bottom, 16) + 24,
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Brand App Bar */}
-        <View style={styles.topBar}>
-          <View style={styles.brandBadgeRow}>
-            <View style={styles.logoCircleSmall}>
-              <MaterialCommunityIcons
-                name="sprout"
-                size={20}
-                color={ThemeColors.primary}
-              />
-            </View>
-            <Text style={styles.brandTitle}>HarianTani</Text>
-          </View>
-          <View style={styles.statusPill}>
-            <View style={styles.pulseDot} />
-            <Text style={styles.statusPillText}>v2.4 Ready</Text>
-          </View>
-        </View>
-
-        {/* Welcome Branding Card with Tactile Agro Glow */}
-        <AppCard style={styles.welcomeCard}>
-          <View style={styles.badgeCategory}>
+        {/* Brand Hero & Context */}
+        <View style={styles.heroSection}>
+          <View style={styles.heroCategoryPill}>
             <MaterialCommunityIcons
-              name="check-decagram"
-              size={15}
-              color={ThemeColors.primary}
+              name="leaf"
+              size={14}
+              color="#005139"
             />
-            <Text style={styles.badgeCategoryText}>
-              Aplikasi Manajemen Tani
+            <Text style={styles.heroCategoryText}>
+              APLIKASI MANAJEMEN TANI CERDAS
             </Text>
           </View>
 
@@ -105,68 +133,49 @@ export default function LoginScreen() {
             Kelola lahan, pantau jadwal perawatan, dan hitung keuntungan panen
             harian Anda dengan mudah.
           </Text>
+        </View>
 
-          {/* Mini Field Visual Showcase */}
-          <View style={styles.fieldShowcase}>
-            <View style={styles.fieldIconBox}>
-              <MaterialCommunityIcons
-                name="image-filter-hdr"
-                size={22}
-                color={ThemeColors.primary}
-              />
-            </View>
-            <View style={styles.fieldTextCol}>
-              <Text style={styles.fieldTitle}>Sentra Lahan Aktif</Text>
-              <Text style={styles.fieldSubtitle}>Musim Tanam Gadu 2026</Text>
-            </View>
-            <View style={styles.onlineBadge}>
-              <Text style={styles.onlineBadgeText}>Online</Text>
-            </View>
-          </View>
-        </AppCard>
-
-        {/* Hardware Security Pill Badge */}
-        <View style={styles.securityBadge}>
+        {/* Hardware Security Indicator Badge */}
+        <View style={styles.securityCard}>
           <View style={styles.securityIconBox}>
             <MaterialCommunityIcons
-              name={
-                isSecureHardwareAvailable
-                  ? 'shield-check'
-                  : 'shield-alert-outline'
-              }
-              size={18}
-              color={
-                isSecureHardwareAvailable
-                  ? ThemeColors.primary
-                  : ThemeColors.warning
-              }
+              name="shield-check"
+              size={19}
+              color="#005139"
             />
           </View>
           <View style={styles.securityTextCol}>
-            <View style={styles.securityRow}>
-              <View
-                style={[
-                  styles.pulseDot,
-                  {
-                    backgroundColor: isSecureHardwareAvailable
-                      ? ThemeColors.profit
-                      : ThemeColors.warning,
-                  },
-                ]}
-              />
-              <Text style={styles.securityLabel}>KEAMANAN PERANGKAT</Text>
-            </View>
-            <Text style={styles.securityDesc} numberOfLines={1}>
+            <Text style={styles.securityTitle}>
+              PENYIMPANAN AMAN TERVERIFIKASI
+            </Text>
+            <Text style={styles.securitySubtitle} numberOfLines={1}>
               {isSecureHardwareAvailable
                 ? 'Hardware Keystore / Keychain Aktif'
-                : 'Mode Pengujian: Memori Penyimpanan Lokal'}
+                : 'Enkripsi Sesi Lokal Terproteksi'}
             </Text>
           </View>
           <MaterialCommunityIcons
-            name="lock-check"
-            size={18}
-            color={ThemeColors.textMuted}
+            name="lock-check-outline"
+            size={19}
+            color="#006C49"
           />
+        </View>
+
+        {/* Organic Visual Accent Card (Siklus Tanam) */}
+        <View style={styles.visualBannerCard}>
+          <View style={styles.visualBannerCircle}>
+            <MaterialCommunityIcons
+              name="tractor"
+              size={24}
+              color="#FFFFFF"
+            />
+          </View>
+          <View style={styles.visualBannerTextCol}>
+            <Text style={styles.visualBannerTitle}>Siklus Tanam 2026</Text>
+            <Text style={styles.visualBannerSubtitle}>
+              Sinkronisasi data lahan terdistribusi
+            </Text>
+          </View>
         </View>
 
         {/* Error Message Alert */}
@@ -174,17 +183,17 @@ export default function LoginScreen() {
           <View style={styles.errorContainer} accessibilityRole="alert">
             <MaterialCommunityIcons
               name="alert-circle-outline"
-              size={20}
+              size={18}
               color={ThemeColors.loss}
             />
             <Text style={styles.errorText}>{errorMessage}</Text>
           </View>
         ) : null}
 
-        {/* Main Login Form Card */}
-        <AppCard style={styles.formCard}>
+        {/* Form Section */}
+        <View style={styles.formSection}>
           <FormInput
-            label="Alamat Email Petani"
+            label="Alamat Email Petani *"
             placeholder="contoh: budi.santoso@tani.id"
             value={email}
             onChangeText={(text) => {
@@ -206,7 +215,7 @@ export default function LoginScreen() {
           />
 
           <FormInput
-            label="Kata Sandi"
+            label="Kata Sandi *"
             placeholder="Masukkan kata sandi akun"
             value={password}
             onChangeText={(text) => {
@@ -238,32 +247,40 @@ export default function LoginScreen() {
             }
           />
 
-          {/* Remember Me Toggle */}
-          <TouchableOpacity
-            style={styles.rememberRow}
-            onPress={() => setRememberMe(!rememberMe)}
-            activeOpacity={0.8}
-          >
-            <View
-              style={[
-                styles.checkboxBox,
-                rememberMe && styles.checkboxBoxChecked,
-              ]}
+          {/* Remember & Forgot Password */}
+          <View style={styles.rememberForgotRow}>
+            <TouchableOpacity
+              style={styles.rememberLeft}
+              onPress={() => setRememberMe(!rememberMe)}
+              activeOpacity={0.8}
             >
-              {rememberMe && (
-                <MaterialCommunityIcons
-                  name="check"
-                  size={14}
-                  color={ThemeColors.onPrimary}
-                />
-              )}
-            </View>
-            <Text style={styles.rememberText}>
-              Ingat Saya di Perangkat Ini
-            </Text>
-          </TouchableOpacity>
+              <View
+                style={[
+                  styles.checkboxBox,
+                  rememberMe && styles.checkboxBoxChecked,
+                ]}
+              >
+                {rememberMe && (
+                  <MaterialCommunityIcons
+                    name="check"
+                    size={13}
+                    color="#FFFFFF"
+                  />
+                )}
+              </View>
+              <Text style={styles.rememberText}>
+                Ingat Saya di Perangkat Ini
+              </Text>
+            </TouchableOpacity>
 
-          {/* Primary Action CTA */}
+            <TouchableOpacity
+              onPress={handleForgotPassword}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.forgotText}>Lupa Kata Sandi?</Text>
+            </TouchableOpacity>
+          </View>
+
           <PrimaryButton
             title="Masuk ke HarianTani"
             onPress={handleLogin}
@@ -271,102 +288,83 @@ export default function LoginScreen() {
             rightIcon={
               <MaterialCommunityIcons
                 name="arrow-right"
-                size={20}
-                color={ThemeColors.onPrimary}
+                size={18}
+                color="#FFFFFF"
               />
             }
             style={styles.submitButton}
           />
+        </View>
 
-          {/* Quick Demo Fill Button */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>ATAU AKSES CEPAT</Text>
-            <View style={styles.dividerLine} />
-          </View>
+        {/* Alternative Access Divider */}
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>ATAU AKSES CEPAT</Text>
+          <View style={styles.dividerLine} />
+        </View>
 
-          <SecondaryButton
-            title="Masuk Cepat Demo (Pak Budi)"
-            onPress={fillDemoAccount}
-            leftIcon={
-              <MaterialCommunityIcons
-                name="account-circle-outline"
-                size={18}
-                color={ThemeColors.primary}
-              />
-            }
-            style={styles.demoButton}
-          />
-        </AppCard>
-
-        {/* Telemetry Agro Status Dark Card */}
-        <DarkSummaryCard style={styles.telemetryCard}>
-          <View style={styles.telemetryHeader}>
-            <View style={styles.telemetryTitleRow}>
-              <MaterialCommunityIcons
-                name="brain"
-                size={18}
-                color={ThemeColors.secondaryFixed}
-              />
-              <Text style={styles.telemetryTitle}>
-                Asisten Agrikultur HarianTani
+        {/* Quick Access Actions */}
+        <View style={styles.quickAccessCol}>
+          <TouchableOpacity
+            style={styles.quickAccessCardLow}
+            onPress={handleBiometricPrompt}
+            activeOpacity={0.8}
+          >
+            <View style={styles.quickAccessLeft}>
+              <View style={styles.quickIconCircleMint}>
+                <MaterialCommunityIcons
+                  name="fingerprint"
+                  size={18}
+                  color="#005139"
+                />
+              </View>
+              <Text style={styles.quickAccessText} numberOfLines={1}>
+                Masuk dengan Biometrik / Sidik Jari
               </Text>
             </View>
-            <View style={styles.activeTag}>
-              <Text style={styles.activeTagText}>Aktif 24 Jam</Text>
-            </View>
-          </View>
-          <Text style={styles.telemetryQuote}>
-            &quot;Suhu rata-rata wilayah Anda 27°C hari ini. Waktu optimal
-            penyemprotan pupuk organik cair sebelum pukul 09:30 WIB.&quot;
-          </Text>
-          <View style={styles.telemetryFooter}>
             <MaterialCommunityIcons
-              name="water-outline"
-              size={15}
-              color={ThemeColors.secondaryFixed}
+              name="access-point"
+              size={18}
+              color="#006C49"
             />
-            <Text style={styles.telemetryFooterText}>
-              Kelembapan Tanah: 74% • Status Aman
+          </TouchableOpacity>
+        </View>
+
+        {/* Agronomy Tip Card */}
+        <View style={styles.tipCard}>
+          <View style={styles.tipIconBox}>
+            <MaterialCommunityIcons
+              name="white-balance-sunny"
+              size={16}
+              color="#006C49"
+            />
+          </View>
+          <View style={styles.tipTextCol}>
+            <Text style={styles.tipTitle}>ASISTEN AGRIKULTUR SUKARAJA</Text>
+            <Text style={styles.tipBody}>
+              Suhu rata-rata Sukaraja hari ini 28°C. Data pertanian Anda
+              tersimpan aman dan terenkripsi offline.
             </Text>
           </View>
-        </DarkSummaryCard>
+        </View>
 
-        {/* Register Redirection Card */}
-        <AppCard variant="flat" style={styles.registerCard}>
+        {/* Register Footer Section */}
+        <View style={styles.registerFooter}>
           <Text style={styles.registerPrompt}>
             Belum memiliki akun HarianTani?
           </Text>
-          <PrimaryButton
-            title="Daftar Akun Petani Baru"
-            variant="secondary"
+          <TouchableOpacity
+            style={styles.registerLinkBtn}
             onPress={() => router.push('/(auth)/register')}
-            rightIcon={
-              <MaterialCommunityIcons
-                name="account-plus-outline"
-                size={18}
-                color={ThemeColors.primary}
-              />
-            }
-            style={styles.registerButton}
-          />
-        </AppCard>
-
-        {/* Trust & Legal Footer */}
-        <View style={styles.trustFooter}>
-          <View style={styles.trustRow}>
+            activeOpacity={0.75}
+          >
+            <Text style={styles.registerLinkText}>Daftar Akun Petani Baru</Text>
             <MaterialCommunityIcons
-              name="lock-check-outline"
-              size={15}
-              color={ThemeColors.textMuted}
+              name="arrow-top-right"
+              size={16}
+              color="#006C49"
             />
-            <Text style={styles.trustTitle}>
-              Enkripsi Kriptografi Lokal & Keamanan Petani
-            </Text>
-          </View>
-          <Text style={styles.trustDesc}>
-            Data pertanian terenkripsi lokal SHA-256 + Salt • HarianTani v2.4
-          </Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -378,317 +376,325 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: ThemeColors.background,
   },
-  scrollContent: {
+  topHeaderBar: {
+    backgroundColor: '#135D43',
+    paddingTop: Platform.OS === 'ios' ? 50 : 38,
+    paddingBottom: 14,
     paddingHorizontal: Spacing.margin,
-    paddingTop: Platform.OS === 'ios' ? 48 : 24,
-    paddingBottom: 40,
-  },
-  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  brandBadgeRow: {
+  topHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
   },
-  logoCircleSmall: {
-    width: 32,
-    height: 32,
+  headerBackCircle: {
+    width: 38,
+    height: 38,
     borderRadius: Radius.full,
-    backgroundColor: ThemeColors.surfaceTintGreen,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Spacing.sm,
   },
-  brandTitle: {
-    fontSize: 20,
+  topHeaderTitle: {
+    fontSize: 16,
     fontWeight: '700',
-    color: ThemeColors.primary,
-    letterSpacing: -0.3,
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
-  statusPill: {
+  topHeaderProfileCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.full,
+    backgroundColor: '#00442F',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.margin,
+    paddingTop: Spacing.lg,
+    paddingBottom: 36,
+    gap: 18,
+  },
+  heroSection: {
+    gap: 6,
+  },
+  heroCategoryPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: ThemeColors.surface,
-    paddingHorizontal: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: '#6CF8BB',
+    paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: Radius.full,
-    ...Shadows.subtle,
+    gap: 5,
   },
-  pulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: ThemeColors.profit,
-    marginRight: 6,
-  },
-  statusPillText: {
-    fontSize: 11,
+  heroCategoryText: {
+    fontSize: 10.5,
     fontWeight: '700',
-    color: ThemeColors.primary,
-  },
-  welcomeCard: {
-    marginBottom: Spacing.sm,
-    padding: Spacing.lg,
-  },
-  badgeCategory: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: ThemeColors.surfaceTintGreen,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-    marginBottom: Spacing.sm,
-  },
-  badgeCategoryText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: ThemeColors.primary,
-    marginLeft: 4,
-    letterSpacing: 0.3,
+    color: '#005139',
+    letterSpacing: 0.5,
   },
   headline: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     color: ThemeColors.text,
     letterSpacing: -0.4,
-    marginBottom: 6,
+    marginTop: 4,
   },
   subheadline: {
-    fontSize: 13,
+    fontSize: 14,
     color: ThemeColors.textSecondary,
-    lineHeight: 18,
-    marginBottom: Spacing.md,
+    lineHeight: 21,
   },
-  fieldShowcase: {
+  securityCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: ThemeColors.surfaceLow,
-    padding: Spacing.sm + 2,
+    padding: 13,
     borderRadius: Radius.md,
-  },
-  fieldIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: Radius.md,
-    backgroundColor: ThemeColors.surfaceTintGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.sm,
-  },
-  fieldTextCol: {
-    flex: 1,
-  },
-  fieldTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: ThemeColors.text,
-  },
-  fieldSubtitle: {
-    fontSize: 11,
-    color: ThemeColors.primary,
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  onlineBadge: {
-    backgroundColor: ThemeColors.surfaceTintGreen,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-  },
-  onlineBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: ThemeColors.primary,
-  },
-  securityBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: ThemeColors.backgroundLight,
-    padding: Spacing.sm + 2,
-    borderRadius: Radius.md,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: ThemeColors.border,
+    gap: 10,
+    ...Shadows.subtle,
   },
   securityIconBox: {
     width: 34,
     height: 34,
-    borderRadius: Radius.full,
-    backgroundColor: ThemeColors.surfaceTintGreen,
+    borderRadius: 9,
+    backgroundColor: '#6CF8BB',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Spacing.sm,
   },
   securityTextCol: {
     flex: 1,
   },
-  securityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  securityLabel: {
-    fontSize: 10,
+  securityTitle: {
+    fontSize: 11,
     fontWeight: '700',
-    color: ThemeColors.primary,
-    letterSpacing: 0.5,
+    color: '#006C49',
+    letterSpacing: 0.4,
   },
-  securityDesc: {
+  securitySubtitle: {
     fontSize: 12,
-    fontWeight: '500',
     color: ThemeColors.textSecondary,
     marginTop: 1,
+  },
+  visualBannerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: ThemeColors.surfaceHigh,
+    borderRadius: Radius.lg,
+    padding: 16,
+    gap: 14,
+    borderWidth: 1,
+    borderColor: '#DAE2FD',
+  },
+  visualBannerCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.full,
+    backgroundColor: '#135D43',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.button,
+  },
+  visualBannerTextCol: {
+    flex: 1,
+  },
+  visualBannerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: ThemeColors.text,
+  },
+  visualBannerSubtitle: {
+    fontSize: 12.5,
+    color: ThemeColors.textSecondary,
+    marginTop: 2,
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFEBEE',
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: '#FFCDD2',
-    padding: Spacing.sm + 2,
+    borderColor: '#FECACA',
     borderRadius: Radius.md,
-    marginBottom: Spacing.md,
+    padding: 12,
+    gap: 8,
   },
   errorText: {
-    color: ThemeColors.loss,
-    fontSize: 13,
-    fontWeight: '600',
-    marginLeft: 8,
     flex: 1,
+    fontSize: 12.5,
+    color: ThemeColors.loss,
+    fontWeight: '600',
   },
-  formCard: {
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
+  formSection: {
+    marginTop: 2,
   },
-  rememberRow: {
+  rememberForgotRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    justifyContent: 'space-between',
+    marginTop: -2,
+    marginBottom: 16,
+  },
+  rememberLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   checkboxBox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 5,
     borderWidth: 1.5,
     borderColor: ThemeColors.border,
-    backgroundColor: ThemeColors.surfaceLow,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Spacing.sm,
   },
   checkboxBoxChecked: {
-    backgroundColor: ThemeColors.primary,
-    borderColor: ThemeColors.primary,
+    backgroundColor: '#135D43',
+    borderColor: '#135D43',
   },
   rememberText: {
-    fontSize: 13,
-    color: ThemeColors.textSecondary,
+    fontSize: 12.5,
+    color: ThemeColors.text,
     fontWeight: '500',
   },
+  forgotText: {
+    fontSize: 12,
+    color: '#006C49',
+    fontWeight: '700',
+  },
   submitButton: {
-    marginTop: Spacing.xs,
+    marginTop: 2,
   },
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: Spacing.md,
+    marginVertical: 2,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: ThemeColors.border,
+    backgroundColor: '#DAE2FD',
   },
   dividerText: {
-    fontSize: 10,
+    marginHorizontal: 12,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: ThemeColors.textMuted,
-    paddingHorizontal: Spacing.sm,
-    letterSpacing: 0.8,
+    color: ThemeColors.textSecondary,
+    letterSpacing: 0.6,
   },
-  demoButton: {
+  quickAccessCol: {
+    gap: 10,
+  },
+  quickAccessCardWhite: {
     height: 48,
-  },
-  telemetryCard: {
-    marginBottom: Spacing.md,
-  },
-  telemetryHeader: {
+    paddingHorizontal: 14,
+    borderRadius: Radius.md,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: ThemeColors.border,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.xs + 2,
+    ...Shadows.subtle,
   },
-  telemetryTitleRow: {
+  quickAccessCardLow: {
+    height: 48,
+    paddingHorizontal: 14,
+    borderRadius: Radius.md,
+    backgroundColor: ThemeColors.surfaceLow,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    ...Shadows.subtle,
   },
-  telemetryTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: ThemeColors.onDark,
-    marginLeft: 6,
+  quickAccessLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
   },
-  activeTag: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+  quickIconCircleNeutral: {
+    width: 32,
+    height: 32,
     borderRadius: Radius.full,
-  },
-  activeTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: ThemeColors.secondaryFixed,
-  },
-  telemetryQuote: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.82)',
-    lineHeight: 18,
-    fontStyle: 'italic',
-    marginBottom: Spacing.sm,
-  },
-  telemetryFooter: {
-    flexDirection: 'row',
+    backgroundColor: '#DAE2FD',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  telemetryFooterText: {
-    fontSize: 11,
-    color: ThemeColors.secondaryFixed,
+  quickIconCircleMint: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    backgroundColor: '#6CF8BB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickAccessText: {
+    fontSize: 12.5,
     fontWeight: '600',
-    marginLeft: 5,
+    color: ThemeColors.text,
+    flex: 1,
   },
-  registerCard: {
-    padding: Spacing.md,
+  tipCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: ThemeColors.surfaceLow,
+    padding: 15,
+    borderRadius: Radius.lg,
+    gap: 10,
+  },
+  tipIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#DAE2FD',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  tipTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  tipTitle: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#006C49',
+    letterSpacing: 0.5,
+  },
+  tipBody: {
+    fontSize: 12,
+    color: ThemeColors.textSecondary,
+    lineHeight: 18,
+  },
+  registerFooter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 4,
+    gap: 4,
   },
   registerPrompt: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: ThemeColors.textSecondary,
-    marginBottom: Spacing.sm,
   },
-  registerButton: {
-    width: '100%',
-  },
-  trustFooter: {
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-  },
-  trustRow: {
+  registerLinkBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 2,
+    gap: 4,
   },
-  trustTitle: {
-    fontSize: 11,
-    color: ThemeColors.textMuted,
-    fontWeight: '600',
-    marginLeft: 5,
-  },
-  trustDesc: {
-    fontSize: 10,
-    color: ThemeColors.textMuted,
-    textAlign: 'center',
+  registerLinkText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#006C49',
   },
 });

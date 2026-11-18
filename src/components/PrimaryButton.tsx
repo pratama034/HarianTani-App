@@ -41,7 +41,7 @@ export function PrimaryButton({
         return ThemeColors.loss;
       case 'primary':
       default:
-        return ThemeColors.primary;
+        return ThemeColors.primaryContainer; // #135D43
     }
   };
 
@@ -86,11 +86,11 @@ export function PrimaryButton({
 
 const styles = StyleSheet.create({
   button: {
-    height: 52, // Strict 52px target standard from DESIGN.md
-    borderRadius: Radius.full, // Full capsule
+    height: 48, // 48px standard per Modern Agritech Precision DESIGN.md
+    borderRadius: Radius.md, // 12px rounded-xl
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
   },
   content: {
     flexDirection: 'row',
@@ -98,9 +98,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   text: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
   iconLeft: {
     marginRight: Spacing.sm,

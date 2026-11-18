@@ -32,6 +32,9 @@ export function mapLahanDTOtoModel(dto: LahanDTO): Lahan {
     luas: dto.luas || '',
     tanaman: dto.tanaman || '',
     tanggalTanam: dto.tanggal_tanam || new Date().toISOString().split('T')[0],
+    latitude: dto.latitude !== undefined ? dto.latitude : null,
+    longitude: dto.longitude !== undefined ? dto.longitude : null,
+    address: dto.address || null,
     createdAt: dto.created_at,
   };
 }
@@ -46,6 +49,16 @@ export function mapModelToLahanDTO(model: Omit<Lahan, 'id'> & { id?: string }): 
     tanaman: model.tanaman.trim(),
     tanggal_tanam: model.tanggalTanam,
   };
+
+  if (typeof model.latitude === 'number' && !isNaN(model.latitude)) {
+    dto.latitude = model.latitude;
+  }
+  if (typeof model.longitude === 'number' && !isNaN(model.longitude)) {
+    dto.longitude = model.longitude;
+  }
+  if (model.address && model.address.trim().length > 0) {
+    dto.address = model.address.trim();
+  }
 
   if (model.id) {
     dto.id = model.id;

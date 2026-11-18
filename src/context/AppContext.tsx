@@ -6,14 +6,23 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   apiGet,
   apiPost,
   apiPatch,
+  getJurnalLapangan,
+  getLaporanPanen,
   isSupabaseConfigured,
   ApiError,
   ApiErrorType,
 } from '../services/api';
+import {
+  enqueueMutation,
+  processMutationQueue,
+  getPendingMutationCount,
+  clearMutationQueue,
+} from '../services/syncQueue';
 import {
   Lahan,
   Jadwal,
@@ -67,95 +76,24 @@ export type AppContextType = {
   statusCode: number | null;
   isCloudConnected: boolean;
   isSimulationActive: boolean;
+  pendingMutationCount: number;
+  syncOfflineMutations: () => Promise<{ successCount: number; failCount: number; remainingCount: number }>;
   refetchAll: () => Promise<void>;
+  loadMoreJurnal: () => Promise<void>;
+  hasMoreJurnal: boolean;
+  isLoadingMoreJurnal: boolean;
   simulateApiCondition: (scenario: SimulationScenario) => Promise<void>;
   clearError: () => void;
+  clearCache: () => Promise<void>;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Data default / demonstrasi untuk lingkungan tanpa koneksi internet atau saat cloud server offline
-const SEED_LAHAN: Lahan[] = [
-  {
-    id: '1',
-    nama: 'Lahan Sawah Ciherang Blok A',
-    luas: '1.2 Ha',
-    tanaman: 'Padi Ciherang',
-    tanggalTanam: new Date(Date.now() - 32 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  },
-  {
-    id: '2',
-    nama: 'Kebun Jagung Manis Blok C',
-    luas: '800 m²',
-    tanaman: 'Jagung Manis',
-    tanggalTanam: new Date(Date.now() - 55 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  },
-];
-
-const SEED_JADWAL: Jadwal[] = [
-  {
-    id: '1',
-    idLahan: '1',
-    tanggal: new Date().toISOString().split('T')[0],
-    waktu: '07:00',
-    kegiatan: 'Penyiraman Air & Pupuk Cair NPK',
-    selesai: false,
-  },
-  {
-    id: '2',
-    idLahan: '1',
-    tanggal: new Date().toISOString().split('T')[0],
-    waktu: '16:00',
-    kegiatan: 'Inspeksi Hama & Pembersihan Gulma',
-    selesai: false,
-  },
-];
-
-const SEED_JURNAL: Jurnal[] = [
-  {
-    id: '1',
-    idLahan: '1',
-    tanggal: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    catatan: 'Aplikasi pupuk NPK Mutiara 16-16-16 dosis 50kg dan penyiangan gulma petak selatan.',
-    biaya: 450000,
-  },
-  {
-    id: '2',
-    idLahan: '2',
-    tanggal: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    catatan: 'Pengendalian hama penggerek batang menggunakan pestisida nabati.',
-    biaya: 175000,
-  },
-];
-
-const SEED_PANEN: Panen[] = [
-  {
-    id: '1',
-    idLahan: '1',
-    tanggal: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    jumlah: 850,
-    satuan: 'Kg',
-    hargaJual: 14000,
-    isCompleted: true,
-    commodity: 'Padi Ciherang',
-  },
-  {
-    id: '2',
-    idLahan: '2',
-    tanggal: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    jumlah: 450,
-    satuan: 'Kg',
-    hargaJual: 9000,
-    isCompleted: false,
-    commodity: 'Jagung Manis',
-  },
-];
-
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-  const [lahanList, setLahanList] = useState<Lahan[]>(SEED_LAHAN);
-  const [jadwalList, setJadwalList] = useState<Jadwal[]>(SEED_JADWAL);
-  const [jurnalList, setJurnalList] = useState<Jurnal[]>(SEED_JURNAL);
-  const [panenList, setPanenList] = useState<Panen[]>(SEED_PANEN);
+  const [lahanList, setLahanList] = useState<Lahan[]>([]);
+  const [jadwalList, setJadwalList] = useState<Jadwal[]>([]);
+  const [jurnalList, setJurnalList] = useState<Jurnal[]>([]);
+  const [panenList, setPanenList] = useState<Panen[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [apiStatus, setApiStatus] = useState<ApiStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -163,6 +101,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [statusCode, setStatusCode] = useState<number | null>(null);
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
   const [isSimulationActive, setIsSimulationActive] = useState<boolean>(false);
+  const [jurnalPage, setJurnalPage] = useState<number>(1);
+  const [hasMoreJurnal, setHasMoreJurnal] = useState<boolean>(true);
+  const [isLoadingMoreJurnal, setIsLoadingMoreJurnal] = useState<boolean>(false);
+  const [pendingMutationCount, setPendingMutationCount] = useState<number>(0);
 
   /**
    * Helper pemetaan error terpusat sesuai Slide 2, 4, 6, 7, 8, & 9 Pekan 6
@@ -222,6 +164,32 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setApiStatus('idle');
   }, []);
 
+  const syncOfflineMutations = useCallback(async () => {
+    try {
+      const res = await processMutationQueue();
+      const remaining = await getPendingMutationCount();
+      setPendingMutationCount(remaining);
+      if (res.successCount > 0) {
+        const [lahanRes, jadwalRes, jurnalRes, panenRes] = await Promise.all([
+          apiGet<LahanDTO[]>('/rest/v1/lahan?select=*'),
+          apiGet<JadwalDTO[]>('/rest/v1/jadwal_perawatan?select=*'),
+          getJurnalLapangan<JurnalDTO>({ limit: 20 }),
+          getLaporanPanen<PanenDTO>({ limit: 20 }),
+        ]);
+        setLahanList(Array.isArray(lahanRes) ? lahanRes.map(mapLahanDTOtoModel) : []);
+        setJadwalList(Array.isArray(jadwalRes) ? jadwalRes.map(mapJadwalDTOtoModel) : []);
+        setJurnalList(Array.isArray(jurnalRes) ? jurnalRes.map(mapJurnalDTOtoModel) : []);
+        setPanenList(Array.isArray(panenRes) ? panenRes.map(mapPanenDTOtoModel) : []);
+        setIsCloudConnected(true);
+      }
+      return res;
+    } catch {
+      const remaining = await getPendingMutationCount();
+      setPendingMutationCount(remaining);
+      return { successCount: 0, failCount: 0, remainingCount: remaining };
+    }
+  }, []);
+
   /**
    * Mengambil seluruh data (lahan, jadwal, jurnal, panen) secara paralel dari Supabase PostgREST API
    * dengan penanganan Loading, Success, Error, Timeout, dan Offline (Slide 2, 4, 6, 7, 10, & 11 Pekan 6).
@@ -234,15 +202,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setStatusCode(null);
     setIsSimulationActive(false);
 
-    // Jika konfigurasi Supabase belum disetel di .env, gunakan mode demonstrasi lokal
+    // Coba proses antrean mutasi yang tertunda jika ada koneksi
+    if (isSupabaseConfigured()) {
+      void syncOfflineMutations();
+    }
+
+    // Jika konfigurasi Supabase belum disetel di .env
     if (!isSupabaseConfigured()) {
-      setLahanList(SEED_LAHAN);
-      setJadwalList(SEED_JADWAL);
-      setJurnalList(SEED_JURNAL);
-      setPanenList(SEED_PANEN);
+      setLahanList([]);
+      setJadwalList([]);
+      setJurnalList([]);
+      setPanenList([]);
       setIsCloudConnected(false);
-      setApiStatus('success');
-      setStatusCode(200);
+      setApiStatus('error');
+      setError('Konfigurasi kredensial Supabase belum disetel di file .env.');
+      setStatusCode(null);
       setIsLoading(false);
       return;
     }
@@ -251,47 +225,57 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       const [lahanRes, jadwalRes, jurnalRes, panenRes] = await Promise.all([
         apiGet<LahanDTO[]>('/rest/v1/lahan?select=*'),
         apiGet<JadwalDTO[]>('/rest/v1/jadwal_perawatan?select=*'),
-        apiGet<JurnalDTO[]>('/rest/v1/jurnal_lapangan?select=*'),
-        apiGet<PanenDTO[]>('/rest/v1/laporan_panen?select=*'),
+        getJurnalLapangan<JurnalDTO>({ limit: 20 }),
+        getLaporanPanen<PanenDTO>({ limit: 20 }),
       ]);
 
-      if (Array.isArray(lahanRes)) {
-        const mappedLahan = lahanRes.map(mapLahanDTOtoModel);
-        setLahanList(mappedLahan.length > 0 ? mappedLahan : SEED_LAHAN);
-      }
-      if (Array.isArray(jadwalRes)) {
-        const mappedJadwal = jadwalRes.map(mapJadwalDTOtoModel);
-        setJadwalList(mappedJadwal.length > 0 ? mappedJadwal : SEED_JADWAL);
-      }
-      if (Array.isArray(jurnalRes)) {
-        const mappedJurnal = jurnalRes.map(mapJurnalDTOtoModel);
-        setJurnalList(mappedJurnal.length > 0 ? mappedJurnal : SEED_JURNAL);
-      }
-      if (Array.isArray(panenRes)) {
-        const mappedPanen = panenRes.map(mapPanenDTOtoModel);
-        setPanenList(mappedPanen.length > 0 ? mappedPanen : SEED_PANEN);
-      }
+      // Jika fetch ke Supabase berhasil namun mengembalikan array kosong, pastikan state lokal di-set menjadi [] (bukan diisi data SEED).
+      setLahanList(Array.isArray(lahanRes) ? lahanRes.map(mapLahanDTOtoModel) : []);
+      setJadwalList(Array.isArray(jadwalRes) ? jadwalRes.map(mapJadwalDTOtoModel) : []);
+      setJurnalList(Array.isArray(jurnalRes) ? jurnalRes.map(mapJurnalDTOtoModel) : []);
+      setPanenList(Array.isArray(panenRes) ? panenRes.map(mapPanenDTOtoModel) : []);
 
       setIsCloudConnected(true);
       setApiStatus('success');
       setStatusCode(200);
       setError(null);
       setErrorType(null);
+      setHasMoreJurnal(true);
+      setJurnalPage(1);
     } catch (err: any) {
-      console.warn('[AppContext] Cloud server offline/tidak terjangkau, beralih ke data lokal:', err.message);
-      // Fallback mulus ke data lokal agar aplikasi tetap berfungsi sempurna
-      setLahanList((prev) => (prev.length > 0 ? prev : SEED_LAHAN));
-      setJadwalList((prev) => (prev.length > 0 ? prev : SEED_JADWAL));
-      setJurnalList((prev) => (prev.length > 0 ? prev : SEED_JURNAL));
-      setPanenList((prev) => (prev.length > 0 ? prev : SEED_PANEN));
-      setIsCloudConnected(false);
-      setApiStatus('idle');
-      setError(null);
-      setErrorType(null);
+      console.warn('[AppContext] API error saat refetchAll:', err?.message);
+      // Jika API mengalami error (Timeout/Offline), biarkan state tetap menggunakan data terakhir yang ada di memori,
+      // dan tampilkan pesan error network ke pengguna (jangan di-replace dengan data SEED).
+      applyErrorState(err);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [applyErrorState, syncOfflineMutations]);
+
+  /**
+   * Logika paginasi Supabase untuk memuat data jurnal berikutnya (onEndReached)
+   */
+  const loadMoreJurnal = useCallback(async () => {
+    if (isLoadingMoreJurnal || !hasMoreJurnal || !isSupabaseConfigured()) return;
+    setIsLoadingMoreJurnal(true);
+    try {
+      const nextPage = jurnalPage + 1;
+      const res = await getJurnalLapangan<JurnalDTO>({ page: nextPage, limit: 20 });
+      if (Array.isArray(res)) {
+        if (res.length < 20) {
+          setHasMoreJurnal(false);
+        }
+        if (res.length > 0) {
+          setJurnalList((prev) => [...prev, ...res.map(mapJurnalDTOtoModel)]);
+          setJurnalPage(nextPage);
+        }
+      }
+    } catch {
+      // Pertahankan data yang ada jika terjadi gangguan jaringan pada pagination
+    } finally {
+      setIsLoadingMoreJurnal(false);
+    }
+  }, [isLoadingMoreJurnal, hasMoreJurnal, jurnalPage]);
 
   /**
    * Simulator Kondisi API untuk mempermudah pengujian & demo Sprint 05 (Slide 12 & 14 Pekan 6):
@@ -363,16 +347,26 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     let isMounted = true;
 
     const loadInitialData = async () => {
+      // Inisialisasi hitungan antrean mutasi offline
+      try {
+        const pendingCount = await getPendingMutationCount();
+        if (isMounted) {
+          setPendingMutationCount(pendingCount);
+        }
+      } catch {
+        // silent
+      }
+
       if (!isSupabaseConfigured()) {
         if (isMounted) {
-          setLahanList(SEED_LAHAN);
-          setJadwalList(SEED_JADWAL);
-          setJurnalList(SEED_JURNAL);
-          setPanenList(SEED_PANEN);
+          setLahanList([]);
+          setJadwalList([]);
+          setJurnalList([]);
+          setPanenList([]);
           setIsCloudConnected(false);
-          setApiStatus('idle');
-          setStatusCode(200);
-          setError(null);
+          setApiStatus('error');
+          setError('Konfigurasi kredensial Supabase belum disetel di file .env.');
+          setStatusCode(null);
           setIsLoading(false);
         }
         return;
@@ -380,34 +374,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
       try {
         setApiStatus('loading');
+        // Sinkronisasikan mutasi offline yang sempat tertunda jika ada koneksi
+        void syncOfflineMutations();
+
         const [lahanRes, jadwalRes, jurnalRes, panenRes] = await Promise.all([
           apiGet<LahanDTO[]>('/rest/v1/lahan?select=*'),
           apiGet<JadwalDTO[]>('/rest/v1/jadwal_perawatan?select=*'),
-          apiGet<JurnalDTO[]>('/rest/v1/jurnal_lapangan?select=*'),
-          apiGet<PanenDTO[]>('/rest/v1/laporan_panen?select=*'),
+          getJurnalLapangan<JurnalDTO>({ limit: 20 }),
+          getLaporanPanen<PanenDTO>({ limit: 20 }),
         ]);
 
         if (isMounted) {
-          if (Array.isArray(lahanRes) && lahanRes.length > 0) {
-            setLahanList(lahanRes.map(mapLahanDTOtoModel));
-          } else {
-            setLahanList(SEED_LAHAN);
-          }
-          if (Array.isArray(jadwalRes) && jadwalRes.length > 0) {
-            setJadwalList(jadwalRes.map(mapJadwalDTOtoModel));
-          } else {
-            setJadwalList(SEED_JADWAL);
-          }
-          if (Array.isArray(jurnalRes) && jurnalRes.length > 0) {
-            setJurnalList(jurnalRes.map(mapJurnalDTOtoModel));
-          } else {
-            setJurnalList(SEED_JURNAL);
-          }
-          if (Array.isArray(panenRes) && panenRes.length > 0) {
-            setPanenList(panenRes.map(mapPanenDTOtoModel));
-          } else {
-            setPanenList(SEED_PANEN);
-          }
+          setLahanList(Array.isArray(lahanRes) ? lahanRes.map(mapLahanDTOtoModel) : []);
+          setJadwalList(Array.isArray(jadwalRes) ? jadwalRes.map(mapJadwalDTOtoModel) : []);
+          setJurnalList(Array.isArray(jurnalRes) ? jurnalRes.map(mapJurnalDTOtoModel) : []);
+          setPanenList(Array.isArray(panenRes) ? panenRes.map(mapPanenDTOtoModel) : []);
 
           setIsCloudConnected(true);
           setApiStatus('success');
@@ -417,16 +398,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (err: any) {
         if (isMounted) {
-          console.warn('[AppContext] Server Cloud belum aktif/terjangkau. Mengaktifkan mode lokal:', err.message);
-          setLahanList(SEED_LAHAN);
-          setJadwalList(SEED_JADWAL);
-          setJurnalList(SEED_JURNAL);
-          setPanenList(SEED_PANEN);
-          setIsCloudConnected(false);
-          setApiStatus('idle');
-          setStatusCode(200);
-          setError(null);
-          setErrorType(null);
+          console.warn('[AppContext] Gagal memuat data awal dari cloud:', err?.message);
+          applyErrorState(err);
         }
       } finally {
         if (isMounted) {
@@ -440,42 +413,124 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       isMounted = false;
     };
+  }, [applyErrorState, syncOfflineMutations]);
+
+  /**
+   * Membersihkan seluruh data cache lokal AsyncStorage dan mereset memori state AppContext
+   */
+  const clearCache = useCallback(async () => {
+    try {
+      await AsyncStorage.clear();
+      await clearMutationQueue();
+      setPendingMutationCount(0);
+    } catch (err) {
+      console.warn('[AppContext] Gagal membersihkan AsyncStorage:', err);
+    }
+    setLahanList([]);
+    setJadwalList([]);
+    setJurnalList([]);
+    setPanenList([]);
+    setError(null);
+    setErrorType(null);
+    setStatusCode(null);
+    setApiStatus('idle');
   }, []);
 
   /**
-   * Menambahkan Lahan Baru (POST /rest/v1/lahan) dengan Penanganan Error (Slide 9 & 10)
+   * Menambahkan Lahan Baru (POST /rest/v1/lahan) dengan Penanganan Error dan Offline Mutation Queue
    */
   const addLahan = async (lahanData: Omit<Lahan, 'id'>) => {
+    const dto = mapModelToLahanDTO(lahanData);
+
     if (isSupabaseConfigured() && isCloudConnected) {
       try {
-        const dto = mapModelToLahanDTO(lahanData);
-        const res = await apiPost<LahanDTO[] | LahanDTO>('/rest/v1/lahan', dto);
-        const insertedDto = Array.isArray(res) ? res[0] : res;
+        let insertedDto: LahanDTO | null = null;
+        try {
+          const res = await apiPost<LahanDTO[] | LahanDTO>('/rest/v1/lahan', dto);
+          insertedDto = Array.isArray(res) ? res[0] : res;
+        } catch (postErr: any) {
+          const errMsg = String(postErr?.message || postErr?.data?.message || '').toLowerCase();
+          const isSchemaError =
+            errMsg.includes('pgrst204') ||
+            errMsg.includes('schema cache') ||
+            errMsg.includes('column') ||
+            postErr?.status === 400;
+
+          // Jika Supabase menolak karena kolom LBS (latitude/longitude/address) belum ada di tabel Supabase,
+          // lakukan retry otomatis menggunakan core fields agar data tetap tersimpan ke cloud secara permanen.
+          if (isSchemaError && (dto.latitude !== undefined || dto.longitude !== undefined || dto.address !== undefined)) {
+            const coreDto: LahanDTO = {
+              nama: dto.nama,
+              luas: dto.luas,
+              tanaman: dto.tanaman,
+              tanggal_tanam: dto.tanggal_tanam,
+            };
+            const retryRes = await apiPost<LahanDTO[] | LahanDTO>('/rest/v1/lahan', coreDto);
+            insertedDto = Array.isArray(retryRes) ? retryRes[0] : retryRes;
+          } else {
+            throw postErr;
+          }
+        }
+
         if (insertedDto) {
-          const newLahan = mapLahanDTOtoModel(insertedDto);
+          const newLahan: Lahan = {
+            ...mapLahanDTOtoModel(insertedDto),
+            latitude: lahanData.latitude ?? null,
+            longitude: lahanData.longitude ?? null,
+            address: lahanData.address ?? null,
+          };
           setLahanList((prev) => [...prev, newLahan]);
           return;
         }
       } catch (err: any) {
-        console.warn('[AppContext] Gagal simpan ke cloud, simpan ke lokal:', err.message);
+        console.warn('[AppContext] Gagal simpan ke cloud, enqueue ke antrean mutasi offline:', err.message);
+        // Sanitasi payload antrean agar tidak menimbulkan error skema berulang saat sinkronisasi
+        const queuePayload: LahanDTO = {
+          nama: dto.nama,
+          luas: dto.luas,
+          tanaman: dto.tanaman,
+          tanggal_tanam: dto.tanggal_tanam,
+        };
+        await enqueueMutation({
+          endpoint: '/rest/v1/lahan',
+          method: 'POST',
+          payload: queuePayload,
+        });
+        const count = await getPendingMutationCount();
+        setPendingMutationCount(count);
       }
+    } else {
+      const queuePayload: LahanDTO = {
+        nama: dto.nama,
+        luas: dto.luas,
+        tanaman: dto.tanaman,
+        tanggal_tanam: dto.tanggal_tanam,
+      };
+      await enqueueMutation({
+        endpoint: '/rest/v1/lahan',
+        method: 'POST',
+        payload: queuePayload,
+      });
+      const count = await getPendingMutationCount();
+      setPendingMutationCount(count);
     }
 
-    // Fallback lokal jika API belum tersambung
+    // Update optimis ke state lokal
     const newLahan: Lahan = {
       ...lahanData,
-      id: Date.now().toString(),
+      id: `offline_${Date.now()}`,
     };
     setLahanList((prev) => [...prev, newLahan]);
   };
 
   /**
-   * Menambahkan Jadwal Perawatan Baru (POST /rest/v1/jadwal_perawatan)
+   * Menambahkan Jadwal Perawatan Baru (POST /rest/v1/jadwal_perawatan) dengan Offline Queue
    */
   const addJadwal = async (jadwalData: Omit<Jadwal, 'id' | 'selesai'>) => {
+    const dto = mapModelToJadwalDTO(jadwalData);
+
     if (isSupabaseConfigured() && isCloudConnected) {
       try {
-        const dto = mapModelToJadwalDTO(jadwalData);
         const res = await apiPost<JadwalDTO[] | JadwalDTO>('/rest/v1/jadwal_perawatan', dto);
         const insertedDto = Array.isArray(res) ? res[0] : res;
         if (insertedDto) {
@@ -484,14 +539,29 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           return;
         }
       } catch (err: any) {
-        console.warn('[AppContext] Gagal simpan jadwal ke cloud, simpan ke lokal:', err.message);
+        console.warn('[AppContext] Gagal simpan jadwal ke cloud, enqueue ke antrean mutasi offline:', err.message);
+        await enqueueMutation({
+          endpoint: '/rest/v1/jadwal_perawatan',
+          method: 'POST',
+          payload: dto,
+        });
+        const count = await getPendingMutationCount();
+        setPendingMutationCount(count);
       }
+    } else {
+      await enqueueMutation({
+        endpoint: '/rest/v1/jadwal_perawatan',
+        method: 'POST',
+        payload: dto,
+      });
+      const count = await getPendingMutationCount();
+      setPendingMutationCount(count);
     }
 
-    // Fallback lokal
+    // Update optimis ke state lokal
     const newJadwal: Jadwal = {
       ...jadwalData,
-      id: Date.now().toString(),
+      id: `offline_${Date.now()}`,
       selesai: false,
     };
     setJadwalList((prev) => [...prev, newJadwal]);
@@ -510,20 +580,31 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       prev.map((j) => (j.id === id ? { ...j, selesai: nextStatus } : j))
     );
 
-    // Hanya kirim PATCH ke Supabase jika ID berupa UUID/angka valid di database dan sedang online
-    if (isSupabaseConfigured() && isCloudConnected && id.length > 4) {
+    // Kirim PATCH ke Supabase atau simpan ke offline mutation queue
+    if (isSupabaseConfigured() && isCloudConnected && !id.startsWith('offline_')) {
       try {
         await apiPatch<JadwalDTO[]>(
           `/rest/v1/jadwal_perawatan?id=eq.${id}`,
           { selesai: nextStatus }
         );
       } catch (err: any) {
-        console.warn('[AppContext] Gagal mengupdate status jadwal di server:', err.message);
-        // Rollback state lokal jika request gagal
-        setJadwalList((prev) =>
-          prev.map((j) => (j.id === id ? { ...j, selesai: !nextStatus } : j))
-        );
+        console.warn('[AppContext] Gagal mengupdate status jadwal di server, enqueue ke offline queue:', err.message);
+        await enqueueMutation({
+          endpoint: `/rest/v1/jadwal_perawatan?id=eq.${id}`,
+          method: 'PATCH',
+          payload: { selesai: nextStatus },
+        });
+        const count = await getPendingMutationCount();
+        setPendingMutationCount(count);
       }
+    } else if (!id.startsWith('offline_')) {
+      await enqueueMutation({
+        endpoint: `/rest/v1/jadwal_perawatan?id=eq.${id}`,
+        method: 'PATCH',
+        payload: { selesai: nextStatus },
+      });
+      const count = await getPendingMutationCount();
+      setPendingMutationCount(count);
     }
   };
 
@@ -531,9 +612,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
    * Menambahkan Catatan Jurnal Lapangan Baru (POST /rest/v1/jurnal_lapangan)
    */
   const addJurnal = async (jurnalData: Omit<Jurnal, 'id'>) => {
+    const dto = mapModelToJurnalDTO(jurnalData);
+
     if (isSupabaseConfigured() && isCloudConnected) {
       try {
-        const dto = mapModelToJurnalDTO(jurnalData);
         const res = await apiPost<JurnalDTO[] | JurnalDTO>('/rest/v1/jurnal_lapangan', dto);
         const insertedDto = Array.isArray(res) ? res[0] : res;
         if (insertedDto) {
@@ -542,14 +624,29 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           return;
         }
       } catch (err: any) {
-        console.warn('[AppContext] Gagal simpan jurnal ke cloud, simpan ke lokal:', err.message);
+        console.warn('[AppContext] Gagal simpan jurnal ke cloud, enqueue ke offline mutation queue:', err.message);
+        await enqueueMutation({
+          endpoint: '/rest/v1/jurnal_lapangan',
+          method: 'POST',
+          payload: dto,
+        });
+        const count = await getPendingMutationCount();
+        setPendingMutationCount(count);
       }
+    } else {
+      await enqueueMutation({
+        endpoint: '/rest/v1/jurnal_lapangan',
+        method: 'POST',
+        payload: dto,
+      });
+      const count = await getPendingMutationCount();
+      setPendingMutationCount(count);
     }
 
-    // Fallback lokal
+    // Update optimis ke state lokal
     const newJurnal: Jurnal = {
       ...jurnalData,
-      id: Date.now().toString(),
+      id: `offline_${Date.now()}`,
     };
     setJurnalList((prev) => [newJurnal, ...prev]);
   };
@@ -558,9 +655,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
    * Menambahkan Laporan Hasil Panen Baru (POST /rest/v1/laporan_panen)
    */
   const addPanen = async (panenData: Omit<Panen, 'id'>) => {
+    const dto = mapModelToPanenDTO(panenData);
+
     if (isSupabaseConfigured() && isCloudConnected) {
       try {
-        const dto = mapModelToPanenDTO(panenData);
         const res = await apiPost<PanenDTO[] | PanenDTO>('/rest/v1/laporan_panen', dto);
         const insertedDto = Array.isArray(res) ? res[0] : res;
         if (insertedDto) {
@@ -569,14 +667,29 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           return;
         }
       } catch (err: any) {
-        console.warn('[AppContext] Gagal simpan panen ke cloud, simpan ke lokal:', err.message);
+        console.warn('[AppContext] Gagal simpan panen ke cloud, enqueue ke offline mutation queue:', err.message);
+        await enqueueMutation({
+          endpoint: '/rest/v1/laporan_panen',
+          method: 'POST',
+          payload: dto,
+        });
+        const count = await getPendingMutationCount();
+        setPendingMutationCount(count);
       }
+    } else {
+      await enqueueMutation({
+        endpoint: '/rest/v1/laporan_panen',
+        method: 'POST',
+        payload: dto,
+      });
+      const count = await getPendingMutationCount();
+      setPendingMutationCount(count);
     }
 
-    // Fallback lokal
+    // Update optimis ke state lokal
     const newPanen: Panen = {
       ...panenData,
-      id: Date.now().toString(),
+      id: `offline_${Date.now()}`,
       isCompleted: panenData.isCompleted ?? false,
     };
     setPanenList((prev) => [newPanen, ...prev]);
@@ -595,21 +708,31 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       prev.map((item) => (item.id === id ? { ...item, isCompleted: nextStatus } : item))
     );
 
-    // Kirim PATCH ke Supabase jika terhubung ke cloud
-    if (isSupabaseConfigured() && isCloudConnected && id.length > 4) {
+    // Kirim PATCH ke Supabase atau simpan ke antrean offline jika jaringan terputus
+    if (isSupabaseConfigured() && isCloudConnected && !id.startsWith('offline_')) {
       try {
         await apiPatch<PanenDTO[]>(
           `/rest/v1/laporan_panen?id=eq.${id}`,
           { selesai: nextStatus, is_completed: nextStatus }
         );
       } catch (err: any) {
-        console.warn('[AppContext] Gagal update status panen di cloud:', err.message);
-        // Rollback state lokal jika request gagal
-        setPanenList((prev) =>
-          prev.map((item) => (item.id === id ? { ...item, isCompleted: !nextStatus } : item))
-        );
-        throw err;
+        console.warn('[AppContext] Gagal update status panen di cloud, enqueue ke offline mutation queue:', err.message);
+        await enqueueMutation({
+          endpoint: `/rest/v1/laporan_panen?id=eq.${id}`,
+          method: 'PATCH',
+          payload: { selesai: nextStatus, is_completed: nextStatus },
+        });
+        const count = await getPendingMutationCount();
+        setPendingMutationCount(count);
       }
+    } else if (!id.startsWith('offline_')) {
+      await enqueueMutation({
+        endpoint: `/rest/v1/laporan_panen?id=eq.${id}`,
+        method: 'PATCH',
+        payload: { selesai: nextStatus, is_completed: nextStatus },
+      });
+      const count = await getPendingMutationCount();
+      setPendingMutationCount(count);
     }
   };
 
@@ -634,9 +757,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         statusCode,
         isCloudConnected,
         isSimulationActive,
+        pendingMutationCount,
+        syncOfflineMutations,
         refetchAll,
+        loadMoreJurnal,
+        hasMoreJurnal,
+        isLoadingMoreJurnal,
         simulateApiCondition,
         clearError,
+        clearCache,
       }}
     >
       {children}

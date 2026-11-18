@@ -11,7 +11,7 @@ export function AppCard({
   style,
   children,
   variant = 'white',
-  bordered = false,
+  bordered = true,
   ...props
 }: AppCardProps) {
   const getBackgroundColor = () => {
@@ -44,7 +44,7 @@ export function AppCard({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: Radius.xl, // 24px per DESIGN.md
+    borderRadius: Radius.lg, // 16px per Modern Agritech Precision DESIGN.md
     padding: Spacing.md,
     marginVertical: Spacing.xs,
   },

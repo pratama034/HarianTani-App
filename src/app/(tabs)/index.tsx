@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,54 +10,54 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeColors, Radius, Spacing, Shadows } from '../../constants/theme';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { AppCard } from '../../components/AppCard';
-import { DarkSummaryCard } from '../../components/DarkSummaryCard';
-import { SectionHeader } from '../../components/SectionHeader';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
-import { SensorDisplayCard } from '../../components/SensorDisplayCard';
+import { useAccelerometer } from '../../hooks/useAccelerometer';
 
 export default function BerandaScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     lahanList,
     jadwalList,
     jurnalList,
+    panenList,
     toggleJadwalSelesai,
     isLoading,
     error,
     apiStatus,
     statusCode,
-    isCloudConnected,
-    isSimulationActive,
     refetchAll,
   } = useAppContext();
-  const { user, session } = useAuth();
+  const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [weatherTemp, setWeatherTemp] = useState<number>(28);
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refetchAll();
     setRefreshing(false);
-  };
+  }, [refetchAll]);
 
-  const handleShakeRefresh = async () => {
+  const handleShakeRefresh = useCallback(async () => {
+    if (refreshing) return;
     setWeatherTemp((prev) => (prev === 28 ? 27 : prev === 27 ? 29 : 28));
     await onRefresh();
-  };
+  }, [refreshing, onRefresh]);
+
+  // Headless Shake-to-Refresh (> 1.78g) berjalan di background
+  useAccelerometer({
+    onShake: handleShakeRefresh,
+  });
 
   const todayStr = new Date().toISOString().split('T')[0];
   const jadwalHariIni = jadwalList.filter((j) => j.tanggal === todayStr);
   const tugasSelesai = jadwalHariIni.filter((j) => j.selesai).length;
   const tugasBelumSelesai = jadwalHariIni.filter((j) => !j.selesai).length;
-  const persenSelesai =
-    jadwalHariIni.length > 0
-      ? Math.round((tugasSelesai / jadwalHariIni.length) * 100)
-      : 100;
 
   const dateOptions: Intl.DateTimeFormatOptions = {
     weekday: 'long',
@@ -75,20 +75,65 @@ export default function BerandaScreen() {
     }).format(angka);
   };
 
+  const formatCompactRupiah = (angka: number) => {
+    const abs = Math.abs(angka);
+    if (abs >= 1_000_000) {
+      return `Rp ${(angka / 1_000_000).toFixed(1)}M`;
+    }
+    if (abs >= 1_000) {
+      return `Rp ${Math.round(angka / 1_000)}rb`;
+    }
+    return formatRupiah(angka);
+  };
+
+  // Kas Usaha Calculation
+  const totalPendapatan = panenList.reduce(
+    (acc, curr) => acc + curr.jumlah * curr.hargaJual,
+    0
+  );
+  const totalBiaya = jurnalList.reduce((acc, curr) => acc + curr.biaya, 0);
+  const kasUsaha = totalPendapatan - totalBiaya;
+
+  // Featured Lahan
+  const featuredLahan = lahanList[0];
+  const getUmurDays = (tgl?: string) => {
+    if (!tgl) return 38;
+    try {
+      const start = new Date(tgl);
+      const now = new Date();
+      const diff = Math.ceil(
+        Math.abs(now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      return isNaN(diff) || diff <= 0 ? 38 : diff;
+    } catch {
+      return 38;
+    }
+  };
+  const hstDays = getUmurDays(featuredLahan?.tanggalTanam);
+  const totalCycleDays = 115;
+  const hstPercent = Math.min(
+    100,
+    Math.max(10, Math.round((hstDays / totalCycleDays) * 100))
+  );
+  const sisaHari = Math.max(0, totalCycleDays - hstDays);
+
   if (isLoading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={ThemeColors.primary} />
-        <Text style={styles.loadingText}>Memuat data...</Text>
-        <Text style={{ fontSize: 13, color: ThemeColors.textSecondary, marginTop: 4 }}>
-          Mohon tunggu sebentar, sedang menghubungi REST API.
-        </Text>
+        <ActivityIndicator size="large" color={ThemeColors.primaryContainer} />
+        <Text style={styles.loadingText}>Memuat dashboard lapangan...</Text>
       </View>
     );
   }
 
-  // Full Screen Error / Offline / Timeout State (Tampil saat simulasi aktif atau jika data kosong dan terjadi error)
-  if (error && (isSimulationActive || (lahanList.length === 0 && jadwalList.length === 0))) {
+  // Full Screen Error / Offline / Timeout State (Hanya jika belum ada data sama sekali di memori)
+  const hasDataInMemory =
+    lahanList.length > 0 ||
+    jadwalList.length > 0 ||
+    jurnalList.length > 0 ||
+    panenList.length > 0;
+
+  if (error && !hasDataInMemory) {
     return (
       <ScrollView
         style={styles.container}
@@ -97,13 +142,19 @@ export default function BerandaScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[ThemeColors.primary]}
-            tintColor={ThemeColors.primary}
+            colors={[ThemeColors.primaryContainer]}
+            tintColor={ThemeColors.primaryContainer}
           />
         }
       >
         <ErrorState
-          type={apiStatus === 'offline' ? 'offline' : apiStatus === 'timeout' ? 'timeout' : 'error'}
+          type={
+            apiStatus === 'offline'
+              ? 'offline'
+              : apiStatus === 'timeout'
+                ? 'timeout'
+                : 'error'
+          }
           statusCode={statusCode}
           message={error}
           onRetry={onRefresh}
@@ -116,358 +167,367 @@ export default function BerandaScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={[
+        styles.scrollContent,
+        {
+          paddingBottom: Math.max(insets.bottom, 16) + 28,
+        },
+      ]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          colors={[ThemeColors.primary]}
-          tintColor={ThemeColors.primary}
+          colors={[ThemeColors.primaryContainer]}
+          tintColor={ThemeColors.primaryContainer}
         />
       }
     >
-      {/* Greeting & Date Header */}
-      <View style={styles.greetingSection}>
-        <View style={styles.greetingRow}>
-          <View style={styles.greetingTextCol}>
-            <Text style={styles.greetingTitle}>
-              Halo, {user?.name ? user.name.split(' ')[0] : 'Petani Cerdas'}!{' '}
-              <Text style={styles.waveHand}>👋</Text>
-            </Text>
-            <Text style={styles.greetingDate}>{todayFormatted}</Text>
-          </View>
-          <View style={styles.weatherBadge}>
-            <MaterialCommunityIcons
-              name="weather-sunny"
-              size={18}
-              color={ThemeColors.warning}
-            />
-            <Text style={styles.weatherText}>{weatherTemp}°C</Text>
-          </View>
+      {/* Network Error Alert Banner saat data terakhir di memori dipertahankan */}
+      {error && hasDataInMemory && (
+        <View style={{ marginBottom: 14 }}>
+          <ErrorState
+            compact
+            type={
+              apiStatus === 'offline'
+                ? 'offline'
+                : apiStatus === 'timeout'
+                  ? 'timeout'
+                  : 'error'
+            }
+            statusCode={statusCode}
+            message={error}
+            onRetry={onRefresh}
+            isRetrying={refreshing}
+          />
         </View>
-
-        {/* Diagnostic Status Micro-Pill */}
-        <View style={styles.diagnosticPill}>
-          <View style={styles.diagnosticLeft}>
-            <MaterialCommunityIcons
-              name={session?.token ? 'shield-check' : isCloudConnected ? 'cloud-check' : 'check-circle'}
-              size={16}
-              color={ThemeColors.primary}
-            />
-            <Text style={styles.diagnosticText}>
-              {isCloudConnected
-                ? (session?.token ? '🟢 Cloud REST API (200 OK • JWT Protected)' : '🟢 Cloud REST API Active (200 OK)')
-                : '🟢 Data Lokal Aktif (Offline Ready)'}
+      )}
+      {/* 1. Greeting & Compact Weather Pill (Diet Dashboard) */}
+      <View style={styles.greetingSection}>
+        <View style={styles.greetingTopRow}>
+          <View style={styles.greetingTextCol}>
+            <View style={styles.greetingMetaRow}>
+              <View style={styles.dashboardPill}>
+                <View style={styles.dashboardPillDot} />
+                <Text style={styles.dashboardPillText}>DASHBOARD LAPANGAN</Text>
+              </View>
+              <View style={styles.weatherMiniBadge}>
+                <Text style={styles.weatherMiniText}>🌤️ {weatherTemp}°C Cerah</Text>
+              </View>
+            </View>
+            <Text style={styles.greetingTitle}>
+              Halo, {user?.name ? `Pak ${user.name}` : 'Pak Budi'}
             </Text>
+            <Text style={styles.greetingDateText}>{todayFormatted}</Text>
           </View>
-          <View style={styles.diagnosticTag}>
-            <Text style={styles.diagnosticTagText}>
-              {isCloudConnected ? (session?.token ? 'JWT Secure' : '200 OK') : 'Local Ready'}
-            </Text>
+
+          <View style={styles.waveIconBox}>
+            <MaterialCommunityIcons
+              name="hand-wave"
+              size={20}
+              color="#FFFFFF"
+            />
           </View>
         </View>
       </View>
 
-      {/* Quick Action Pill Buttons */}
+      {/* 2. Quick Action Buttons */}
       <View style={styles.quickActionsRow}>
         <TouchableOpacity
-          style={styles.actionBtnSecondary}
+          style={styles.actionBtnOutline}
           onPress={() => router.push('/(tabs)/jurnal')}
           activeOpacity={0.85}
         >
           <MaterialCommunityIcons
-            name="notebook-plus"
+            name="notebook-edit-outline"
             size={20}
-            color={ThemeColors.primary}
+            color="#135D43"
           />
-          <Text style={styles.actionBtnSecondaryText}>+ Catat Jurnal</Text>
+          <Text style={styles.actionBtnOutlineText}>+ Catat Jurnal</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.actionBtnPrimary}
+          style={styles.actionBtnSolid}
           onPress={() => router.push('/(tabs)/panen')}
           activeOpacity={0.85}
         >
           <MaterialCommunityIcons
-            name="basket-plus"
+            name="sprout"
             size={20}
-            color={ThemeColors.onPrimary}
+            color="#6CF8BB"
           />
-          <Text style={styles.actionBtnPrimaryText}>+ Catat Panen</Text>
+          <Text style={styles.actionBtnSolidText}>+ Catat Panen</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Dual Metric Cards */}
-      <View style={styles.dualCardsRow}>
-        {/* Card 1: Active Lands */}
-        <AppCard style={styles.metricCardWhite}>
-          <View style={styles.metricTopRow}>
-            <View style={styles.metricIconBox}>
+      {/* 3. Three-Column Metric Summary Cards */}
+      <View style={styles.threeMetricsRow}>
+        {/* Card 1: Lahan Aktif */}
+        <TouchableOpacity
+          style={[styles.miniMetricCard, styles.miniMetricEmerald]}
+          onPress={() => router.push('/(tabs)/lahan')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.miniMetricTop}>
+            <Text style={styles.miniMetricLabel}>Lahan{'\n'}Aktif</Text>
+            <View style={styles.miniIconEmerald}>
               <MaterialCommunityIcons
-                name="sprout"
-                size={22}
-                color={ThemeColors.primary}
+                name="layers-outline"
+                size={15}
+                color="#135D43"
               />
             </View>
-            <View style={styles.metricActiveBadge}>
-              <Text style={styles.metricActiveBadgeText}>Aktif</Text>
-            </View>
           </View>
-          <View style={styles.metricMid}>
-            <Text style={styles.metricBigNumber}>{lahanList.length} Lahan</Text>
-            <Text style={styles.metricSubtext} numberOfLines={1}>
-              {lahanList.length > 0
-                ? lahanList.map((l) => l.nama).join(', ')
-                : 'Belum ada petak'}
+          <View>
+            <Text style={styles.miniMetricValue}>{lahanList.length} Petak</Text>
+            <Text style={styles.miniMetricSubEmerald} numberOfLines={1}>
+              1.8 Ha Total
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.metricFooterRow}
-            onPress={() => router.push('/(tabs)/lahan')}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons
-              name="arrow-right-circle"
-              size={16}
-              color={ThemeColors.primary}
-            />
-            <Text style={styles.metricFooterText}>Lihat Semua Lahan</Text>
-          </TouchableOpacity>
-        </AppCard>
+        </TouchableOpacity>
 
-        {/* Card 2: Operations & Urgent Task (Dark Telemetry Pod) */}
-        <DarkSummaryCard style={styles.metricCardDark}>
-          <View style={styles.metricTopRow}>
-            <View style={styles.metricDarkIconBox}>
+        {/* Card 2: Tugas Hari Ini */}
+        <TouchableOpacity
+          style={[styles.miniMetricCard, styles.miniMetricAmber]}
+          onPress={() => router.push('/(tabs)/jadwal')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.miniMetricTop}>
+            <Text style={styles.miniMetricLabel}>Tugas Hari{'\n'}Ini</Text>
+            <View style={styles.miniIconAmber}>
               <MaterialCommunityIcons
-                name="format-list-checks"
-                size={20}
-                color={ThemeColors.secondaryFixed}
+                name="check-circle-outline"
+                size={15}
+                color="#B45309"
               />
             </View>
-            <View style={styles.taskBadgeDark}>
-              <View style={styles.taskPulseDot} />
-              <Text style={styles.taskBadgeDarkText}>
-                {tugasBelumSelesai} Tertunda
+          </View>
+          <View>
+            <Text style={styles.miniMetricValue}>
+              {tugasBelumSelesai} Tersisa
+            </Text>
+            <Text style={styles.miniMetricSubAmber} numberOfLines={1}>
+              {tugasSelesai} dari {jadwalHariIni.length} selesai
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Card 3: Kas Usaha */}
+        <TouchableOpacity
+          style={[styles.miniMetricCard, styles.miniMetricTeal]}
+          onPress={() => router.push('/(tabs)/panen')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.miniMetricTop}>
+            <Text style={styles.miniMetricLabel}>Kas{'\n'}Usaha</Text>
+            <View style={styles.miniIconTeal}>
+              <MaterialCommunityIcons
+                name="wallet-outline"
+                size={15}
+                color="#0F766E"
+              />
+            </View>
+          </View>
+          <View>
+            <Text style={styles.miniMetricValueCompact} numberOfLines={1}>
+              {formatCompactRupiah(kasUsaha)}
+            </Text>
+            <Text style={styles.miniMetricSubTeal} numberOfLines={1}>
+              {kasUsaha >= 0 ? '+Surplus sehat' : 'Defisit kas'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* 4. Sorotan Petak Utama (Featured Plot Card) */}
+      {featuredLahan && (
+        <View style={styles.sectionBlock}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionHeaderLeft}>
+              <Text style={styles.sectionTitle}>Sorotan Petak Utama</Text>
+              <View style={styles.sectionDot} />
+            </View>
+            <TouchableOpacity
+              style={styles.sectionLinkBtn}
+              onPress={() => router.push('/(tabs)/lahan')}
+            >
+              <Text style={styles.sectionLinkText}>
+                Kelola ({lahanList.length})
+              </Text>
+              <MaterialCommunityIcons
+                name="arrow-right"
+                size={14}
+                color="#135D43"
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.featuredPlotCard}>
+            <View style={styles.featuredTopRow}>
+              <View style={styles.featuredTitleCol}>
+                <View style={styles.featuredNameRow}>
+                  <Text style={styles.featuredPlotName} numberOfLines={1}>
+                    {featuredLahan.nama}
+                  </Text>
+                  <MaterialCommunityIcons
+                    name="check-decagram"
+                    size={17}
+                    color="#059669"
+                  />
+                </View>
+                <Text style={styles.featuredCropMeta}>
+                  {featuredLahan.tanaman} • Tanam {featuredLahan.tanggalTanam}
+                </Text>
+              </View>
+
+              <View style={styles.vegetatifBadge}>
+                <View style={styles.vegetatifDot} />
+                <Text style={styles.vegetatifText}>Vegetatif</Text>
+              </View>
+            </View>
+
+            <View style={styles.hstProgressBox}>
+              <View style={styles.hstTopRow}>
+                <Text style={styles.hstLabel}>Progres Masa Tanam</Text>
+                <Text style={styles.hstValue}>
+                  Hari ke-{hstDays} / {totalCycleDays} HST ({hstPercent}%)
+                </Text>
+              </View>
+              <View style={styles.hstTrack}>
+                <View
+                  style={[styles.hstFill, { width: `${hstPercent}%` }]}
+                />
+              </View>
+              <View style={styles.hstBottomRow}>
+                <View style={styles.hstEstLeft}>
+                  <MaterialCommunityIcons
+                    name="calendar-clock"
+                    size={14}
+                    color="#006C49"
+                  />
+                  <Text style={styles.hstEstText}>Est. Panen: 28 Nov 2026</Text>
+                </View>
+                <View style={styles.hstRemainingBadge}>
+                  <Text style={styles.hstRemainingText}>
+                    Tersisa {sisaHari} hari
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* 5. Jadwal Perawatan Hari Ini */}
+      <View style={styles.sectionBlock}>
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.sectionHeaderLeft}>
+            <Text style={styles.sectionTitle}>Jadwal Perawatan Hari Ini</Text>
+            <View style={styles.countCircleBadge}>
+              <Text style={styles.countCircleText}>
+                {jadwalHariIni.length}
               </Text>
             </View>
           </View>
-          <View style={styles.metricMid}>
-            <Text style={styles.metricBigNumberDark}>{persenSelesai}%</Text>
-            <Text style={styles.metricSubtextDark}>Tugas selesai hari ini</Text>
-          </View>
           <TouchableOpacity
-            style={styles.metricFooterDarkRow}
+            style={styles.sectionLinkBtn}
             onPress={() => router.push('/(tabs)/jadwal')}
-            activeOpacity={0.7}
           >
-            <Text style={styles.metricFooterDarkText}>
-              {tugasBelumSelesai > 0 ? 'Selesaikan Tugas' : 'Semua Beres!'}
-            </Text>
+            <Text style={styles.sectionLinkText}>Kalender</Text>
             <MaterialCommunityIcons
               name="chevron-right"
               size={16}
-              color={ThemeColors.secondaryFixed}
+              color="#135D43"
             />
           </TouchableOpacity>
-        </DarkSummaryCard>
-      </View>
+        </View>
 
-      {/* Week 7: Device Sensor Telemetry & Shake-to-Refresh Module */}
-      <SensorDisplayCard
-        onShakeRefresh={handleShakeRefresh}
-        isRefreshing={refreshing}
-      />
-
-      {/* Route Timeline: Jadwal Perawatan Hari Ini */}
-      <SectionHeader
-        title="Rute Perawatan Hari Ini"
-        icon={
-          <MaterialCommunityIcons
-            name="routes"
-            size={20}
-            color={ThemeColors.primary}
-          />
-        }
-        rightAction={
-          <TouchableOpacity onPress={() => router.push('/(tabs)/jadwal')}>
-            <Text style={styles.seeAllText}>Lihat Semua</Text>
-          </TouchableOpacity>
-        }
-      />
-
-      <AppCard style={styles.timelineCard}>
         {jadwalHariIni.length === 0 ? (
-          <EmptyState
-            iconName="calendar-check"
-            title="Tidak Ada Jadwal Hari Ini"
-            description="Semua agenda perawatan tanaman Anda untuk hari ini telah selesai atau belum ditambahkan."
-          />
+          <View style={styles.whiteCard}>
+            <EmptyState
+              iconName="calendar-check"
+              title="Tidak Ada Jadwal Hari Ini"
+              description="Semua agenda perawatan tanaman untuk hari ini telah selesai."
+            />
+          </View>
         ) : (
-          jadwalHariIni.map((jadwal, index) => {
-            const lahan = lahanList.find((l) => l.id === jadwal.idLahan);
-            const isLast = index === jadwalHariIni.length - 1;
-
-            return (
-              <View key={jadwal.id} style={styles.timelineItem}>
-                {/* Route Node Indicator */}
-                <View style={styles.timelineNodeCol}>
+          <View style={styles.taskStack}>
+            {jadwalHariIni.map((jadwal) => {
+              const lahan = lahanList.find((l) => l.id === jadwal.idLahan);
+              return (
+                <View
+                  key={jadwal.id}
+                  style={[
+                    styles.taskRowCard,
+                    jadwal.selesai
+                      ? styles.taskRowDoneBorder
+                      : styles.taskRowPendingBorder,
+                  ]}
+                >
                   <TouchableOpacity
                     style={[
-                      styles.timelineNode,
+                      styles.taskCheckCircle,
                       jadwal.selesai
-                        ? styles.timelineNodeDone
-                        : styles.timelineNodePending,
+                        ? styles.taskCheckCircleDone
+                        : styles.taskCheckCirclePending,
                     ]}
                     onPress={() => toggleJadwalSelesai(jadwal.id)}
                     activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Tandai tugas ${jadwal.kegiatan}`}
                   >
                     <MaterialCommunityIcons
-                      name={jadwal.selesai ? 'check' : 'clock-outline'}
-                      size={16}
-                      color={
+                      name={
                         jadwal.selesai
-                          ? ThemeColors.onPrimary
-                          : ThemeColors.primary
+                          ? 'check'
+                          : 'checkbox-blank-circle-outline'
                       }
+                      size={18}
+                      color={jadwal.selesai ? '#006C49' : '#B45309'}
                     />
                   </TouchableOpacity>
-                  {!isLast && <View style={styles.timelineConnector} />}
-                </View>
 
-                {/* Task Details */}
-                <View style={styles.timelineContent}>
-                  <View style={styles.timelineMetaRow}>
-                    <Text style={styles.timelineTimeText}>
-                      {jadwal.waktu} WIB • {lahan?.nama || 'Lahan Terkait'}
-                    </Text>
-                    <View
+                  <View style={styles.taskTextCol}>
+                    <Text
                       style={[
-                        styles.taskStatusPill,
-                        jadwal.selesai
-                          ? styles.taskStatusPillDone
-                          : styles.taskStatusPillPending,
+                        styles.taskItemTitle,
+                        jadwal.selesai && styles.taskItemTitleDone,
                       ]}
+                      numberOfLines={1}
                     >
-                      <Text
-                        style={[
-                          styles.taskStatusPillText,
-                          jadwal.selesai
-                            ? styles.taskStatusPillTextDone
-                            : styles.taskStatusPillTextPending,
-                        ]}
-                      >
-                        {jadwal.selesai ? 'Selesai' : 'Menunggu'}
-                      </Text>
+                      {jadwal.kegiatan}
+                    </Text>
+                    <Text style={styles.taskItemSub} numberOfLines={1}>
+                      {jadwal.waktu} WIB • {lahan?.nama || 'Petak Lahan'}
+                    </Text>
+                  </View>
+
+                  {jadwal.selesai ? (
+                    <View style={styles.taskDonePill}>
+                      <Text style={styles.taskDonePillText}>Selesai</Text>
                     </View>
-                  </View>
-                  <Text style={styles.timelineTaskTitle}>
-                    {jadwal.kegiatan}
-                  </Text>
-                  <Text style={styles.timelineTaskDesc}>
-                    {jadwal.selesai
-                      ? 'Telah diverifikasi dikerjakan di lapangan'
-                      : 'Ketuk ikon centang setelah tugas selesai dikerjakan'}
-                  </Text>
+                  ) : (
+                    <View style={styles.taskPendingRight}>
+                      <View style={styles.taskTimePillRed}>
+                        <Text style={styles.taskTimePillRedText}>
+                          {jadwal.waktu} WIB
+                        </Text>
+                      </View>
+                      <View style={styles.taskBellMini}>
+                        <MaterialCommunityIcons
+                          name="bell-ring-outline"
+                          size={15}
+                          color={ThemeColors.textSecondary}
+                        />
+                      </View>
+                    </View>
+                  )}
                 </View>
-              </View>
-            );
-          })
+              );
+            })}
+          </View>
         )}
-      </AppCard>
-
-      {/* Field Conditions & Agronomist Insight Tip */}
-      <AppCard style={styles.insightCard}>
-        <View style={styles.insightHeader}>
-          <View style={styles.insightHeaderLeft}>
-            <MaterialCommunityIcons
-              name="lightbulb-on-outline"
-              size={20}
-              color={ThemeColors.primary}
-            />
-            <Text style={styles.insightTitle}>Saran Agronomis Hari Ini</Text>
-          </View>
-          <View style={styles.insightBadge}>
-            <Text style={styles.insightBadgeText}>Tips Budidaya</Text>
-          </View>
-        </View>
-        <Text style={styles.insightBody}>
-          Waktu paling efektif untuk penyiraman dan pemupukan cair adalah di pagi hari sebelum pukul 09:00 WIB atau sore setelah pukul 16:00 WIB agar penguapan tanah minimal.
-        </Text>
-      </AppCard>
-
-      {/* Latest Journal Entries */}
-      <SectionHeader
-        title="Jurnal Terakhir"
-        icon={
-          <MaterialCommunityIcons
-            name="notebook-outline"
-            size={20}
-            color={ThemeColors.primary}
-          />
-        }
-        rightAction={
-          <TouchableOpacity onPress={() => router.push('/(tabs)/jurnal')}>
-            <Text style={styles.seeAllText}>Riwayat Jurnal</Text>
-          </TouchableOpacity>
-        }
-      />
-
-      {jurnalList.length === 0 ? (
-        <AppCard style={styles.emptyCard}>
-          <EmptyState
-            iconName="notebook-outline"
-            title="Belum Ada Catatan Jurnal"
-            description="Catat perkembangan tanaman, pemupukan, atau pengeluaran biaya operasional harian Anda."
-          />
-        </AppCard>
-      ) : (
-        jurnalList.slice(0, 2).map((jurnal) => {
-          const lahan = lahanList.find((l) => l.id === jurnal.idLahan);
-          return (
-            <AppCard key={jurnal.id} style={styles.journalCard}>
-              <View style={styles.journalHeader}>
-                <View style={styles.journalHeaderLeft}>
-                  <View style={styles.journalIconCircle}>
-                    <MaterialCommunityIcons
-                      name={
-                        jurnal.biaya > 0 ? 'cash-minus' : 'file-document-outline'
-                      }
-                      size={20}
-                      color={
-                        jurnal.biaya > 0 ? ThemeColors.loss : ThemeColors.primary
-                      }
-                    />
-                  </View>
-                  <View>
-                    <Text style={styles.journalLahanName}>
-                      {lahan?.nama || 'Petak Lahan'}
-                    </Text>
-                    <Text style={styles.journalDate}>{jurnal.tanggal}</Text>
-                  </View>
-                </View>
-                {jurnal.biaya > 0 ? (
-                  <View style={styles.journalExpenseBadge}>
-                    <Text style={styles.journalExpenseText}>
-                      - {formatRupiah(jurnal.biaya)}
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.journalObservationBadge}>
-                    <Text style={styles.journalObservationText}>Observasi</Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.journalNoteBox}>
-                <Text style={styles.journalNoteText} numberOfLines={2}>
-                  {jurnal.catatan}
-                </Text>
-              </View>
-            </AppCard>
-          );
-        })
-      )}
+      </View>
 
       <View style={{ height: 24 }} />
     </ScrollView>
@@ -493,425 +553,482 @@ const styles = StyleSheet.create({
     backgroundColor: ThemeColors.background,
   },
   scrollContent: {
-    padding: Spacing.margin,
-    paddingTop: Spacing.sm,
+    paddingHorizontal: Spacing.margin,
+    paddingTop: 18,
+    paddingBottom: 28,
   },
   greetingSection: {
-    marginBottom: Spacing.md,
+    marginBottom: 14,
   },
-  greetingRow: {
+  greetingTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
+    marginBottom: 6,
   },
   greetingTextCol: {
     flex: 1,
+  },
+  dashboardPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#D1FAE5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    gap: 5,
+    marginBottom: 6,
+  },
+  dashboardPillDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#006C49',
+  },
+  dashboardPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#135D43',
+    letterSpacing: 0.5,
   },
   greetingTitle: {
     fontSize: 22,
     fontWeight: '700',
     color: ThemeColors.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
-  waveHand: {
-    fontSize: 20,
+  waveIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: '#135D43',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.button,
   },
-  greetingDate: {
-    fontSize: 13,
-    color: ThemeColors.textSecondary,
-    marginTop: 2,
-  },
-  weatherBadge: {
+  greetingMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: ThemeColors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    ...Shadows.subtle,
+    gap: 8,
+    marginBottom: 6,
   },
-  weatherText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: ThemeColors.text,
-    marginLeft: 4,
-  },
-  diagnosticPill: {
+  weatherMiniBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: ThemeColors.surfaceSageLight,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: Radius.md,
-  },
-  diagnosticLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  diagnosticText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: ThemeColors.primary,
-    marginLeft: 6,
-  },
-  diagnosticTag: {
-    backgroundColor: ThemeColors.surface,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: Radius.full,
   },
-  diagnosticTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: ThemeColors.primary,
-    letterSpacing: 0.3,
+  weatherMiniText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#065F46',
+  },
+  dateWeatherInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 14,
+  },
+  greetingDateText: {
+    fontSize: 12.5,
+    color: ThemeColors.textSecondary,
+    marginTop: 2,
   },
   quickActionsRow: {
     flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
+    gap: 10,
+    marginBottom: 14,
   },
-  actionBtnSecondary: {
+  actionBtnOutline: {
     flex: 1,
     height: 48,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: ThemeColors.surfaceTintGreen,
-    borderRadius: Radius.full,
-    ...Shadows.subtle,
+    gap: 8,
   },
-  actionBtnSecondaryText: {
-    fontSize: 14,
+  actionBtnOutlineText: {
+    fontSize: 13.5,
     fontWeight: '700',
-    color: ThemeColors.primary,
-    marginLeft: 6,
+    color: '#0F172A',
   },
-  actionBtnPrimary: {
+  actionBtnSolid: {
     flex: 1,
     height: 48,
+    backgroundColor: '#006C49',
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: ThemeColors.primary,
-    borderRadius: Radius.full,
-    ...Shadows.button,
+    gap: 8,
   },
-  actionBtnPrimaryText: {
-    fontSize: 14,
+  actionBtnSolidText: {
+    fontSize: 13.5,
     fontWeight: '700',
-    color: ThemeColors.onPrimary,
-    marginLeft: 6,
+    color: '#FFFFFF',
   },
-  dualCardsRow: {
+  threeMetricsRow: {
     flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
+    gap: 9,
+    marginBottom: 16,
   },
-  metricCardWhite: {
+  miniMetricCard: {
     flex: 1,
-    minHeight: 148,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 11,
+    borderWidth: 1,
+    borderLeftWidth: 3,
+    borderColor: '#E2E8F0',
     justifyContent: 'space-between',
-    padding: Spacing.md,
-    borderRadius: Radius.xxl,
+    minHeight: 96,
   },
-  metricTopRow: {
+  miniMetricEmerald: {
+    borderLeftColor: '#059669',
+  },
+  miniMetricAmber: {
+    borderLeftColor: '#F59E0B',
+  },
+  miniMetricTeal: {
+    borderLeftColor: '#0D9488',
+  },
+  miniMetricTop: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  metricIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: Radius.md,
-    backgroundColor: ThemeColors.surfaceTintGreen,
+  miniMetricLabel: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: ThemeColors.textSecondary,
+    lineHeight: 14,
+    flex: 1,
+    marginRight: 4,
+  },
+  miniIconEmerald: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: '#D1FAE5',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  metricActiveBadge: {
-    backgroundColor: ThemeColors.secondaryContainer,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
+  miniIconAmber: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  metricActiveBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: ThemeColors.onSecondaryContainer,
+  miniIconTeal: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: '#CCFBF1',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  metricMid: {
-    marginVertical: 4,
-  },
-  metricBigNumber: {
-    fontSize: 22,
+  miniMetricValue: {
+    fontSize: 15,
     fontWeight: '700',
     color: ThemeColors.text,
-    letterSpacing: -0.3,
   },
-  metricSubtext: {
+  miniMetricValueCompact: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: ThemeColors.text,
+  },
+  miniMetricSubEmerald: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#006C49',
+    marginTop: 2,
+  },
+  miniMetricSubAmber: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#92400E',
+    marginTop: 2,
+  },
+  miniMetricSubTeal: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#00714D',
+    marginTop: 2,
+  },
+  sectionBlock: {
+    marginBottom: 16,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: ThemeColors.text,
+  },
+  sectionDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#006C49',
+  },
+  sectionLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  sectionLinkText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#135D43',
+  },
+  featuredPlotCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    padding: 15,
+  },
+  featuredTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 12,
+  },
+  featuredTitleCol: {
+    flex: 1,
+  },
+  featuredNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  featuredPlotName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: ThemeColors.text,
+  },
+  featuredCropMeta: {
     fontSize: 12,
     color: ThemeColors.textSecondary,
     marginTop: 2,
   },
-  metricFooterRow: {
+  vegetatifBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    backgroundColor: '#ABF1CF',
+    borderWidth: 1,
+    borderColor: '#6EE7B7',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    gap: 5,
   },
-  metricFooterText: {
+  vegetatifDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#059669',
+  },
+  vegetatifText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#005139',
+  },
+  hstProgressBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 10,
+  },
+  hstTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  hstLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: ThemeColors.textSecondary,
+  },
+  hstValue: {
     fontSize: 11,
     fontWeight: '700',
-    color: ThemeColors.primary,
-    marginLeft: 4,
+    color: '#135D43',
   },
-  metricCardDark: {
-    flex: 1,
-    minHeight: 148,
+  hstTrack: {
+    height: 8,
+    backgroundColor: '#D1FAE5',
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  hstFill: {
+    height: '100%',
+    backgroundColor: '#135D43',
+    borderRadius: Radius.full,
+  },
+  hstBottomRow: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: Spacing.md,
-  },
-  metricDarkIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#ECFDF5',
   },
-  taskBadgeDark: {
+  hstEstLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    gap: 4,
+  },
+  hstEstText: {
+    fontSize: 11,
+    color: ThemeColors.textSecondary,
+    fontWeight: '500',
+  },
+  hstRemainingBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  hstRemainingText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: ThemeColors.text,
+  },
+  countCircleBadge: {
+    backgroundColor: '#D1FAE5',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: Radius.full,
   },
-  taskPulseDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: ThemeColors.secondaryFixed,
-    marginRight: 4,
-  },
-  taskBadgeDarkText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: ThemeColors.onDark,
-  },
-  metricBigNumberDark: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: ThemeColors.onDark,
-    letterSpacing: -0.3,
-  },
-  metricSubtextDark: {
-    fontSize: 12,
-    color: ThemeColors.onDarkSecondary,
-    marginTop: 2,
-  },
-  metricFooterDarkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  metricFooterDarkText: {
+  countCircleText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: ThemeColors.secondaryFixed,
-  },
-  seeAllText: {
-    fontSize: 13,
     fontWeight: '700',
-    color: ThemeColors.primary,
+    color: '#006C49',
   },
-  timelineCard: {
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
+  whiteCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  timelineItem: {
+  taskStack: {
+    gap: 9,
+  },
+  taskRowCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     flexDirection: 'row',
-    marginBottom: Spacing.md,
-  },
-  timelineNodeCol: {
     alignItems: 'center',
-    marginRight: Spacing.md,
+    gap: 11,
   },
-  timelineNode: {
+  taskRowDoneBorder: {
+    borderColor: '#D1FAE5',
+    opacity: 0.92,
+  },
+  taskRowPendingBorder: {
+    borderColor: '#FDE68A',
+  },
+  taskCheckCircle: {
     width: 32,
     height: 32,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadows.subtle,
   },
-  timelineNodeDone: {
-    backgroundColor: ThemeColors.primary,
+  taskCheckCircleDone: {
+    backgroundColor: '#ABF1CF',
   },
-  timelineNodePending: {
-    backgroundColor: ThemeColors.surfaceSageLight,
+  taskCheckCirclePending: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
-  timelineConnector: {
-    width: 2,
+  taskTextCol: {
     flex: 1,
-    backgroundColor: ThemeColors.primaryFixedDim,
-    marginVertical: 4,
   },
-  timelineContent: {
-    flex: 1,
-    paddingTop: 2,
-  },
-  timelineMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
-  timelineTimeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: ThemeColors.primary,
-    letterSpacing: 0.3,
-  },
-  taskStatusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-  },
-  taskStatusPillDone: {
-    backgroundColor: ThemeColors.surfaceTintGreen,
-  },
-  taskStatusPillPending: {
-    backgroundColor: ThemeColors.surfaceLow,
-  },
-  taskStatusPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  taskStatusPillTextDone: {
-    color: ThemeColors.profit,
-  },
-  taskStatusPillTextPending: {
-    color: ThemeColors.textSecondary,
-  },
-  timelineTaskTitle: {
-    fontSize: 15,
+  taskItemTitle: {
+    fontSize: 13,
     fontWeight: '700',
     color: ThemeColors.text,
   },
-  timelineTaskDesc: {
-    fontSize: 12,
+  taskItemTitleDone: {
+    textDecorationLine: 'line-through',
+    fontWeight: '600',
+  },
+  taskItemSub: {
+    fontSize: 11.5,
     color: ThemeColors.textSecondary,
     marginTop: 2,
-    lineHeight: 16,
   },
-  insightCard: {
-    backgroundColor: ThemeColors.surfaceTintGreen,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  insightHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
-  },
-  insightHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  insightTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: ThemeColors.text,
-    marginLeft: 6,
-  },
-  insightBadge: {
-    backgroundColor: ThemeColors.surface,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+  taskDonePill: {
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
     borderRadius: Radius.full,
   },
-  insightBadgeText: {
-    fontSize: 10,
+  taskDonePillText: {
+    fontSize: 10.5,
     fontWeight: '700',
-    color: ThemeColors.primary,
+    color: '#006C49',
   },
-  insightBody: {
-    fontSize: 12,
-    color: ThemeColors.text,
-    lineHeight: 18,
-  },
-  emptyCard: {
-    padding: Spacing.md,
-  },
-  journalCard: {
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  journalHeader: {
+  taskPendingRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
+    gap: 6,
   },
-  journalHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  taskTimePillRed: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
   },
-  journalIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: ThemeColors.surfaceLow,
+  taskTimePillRedText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
+  taskBellMini: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: ThemeColors.surfaceContainer,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Spacing.sm,
-  },
-  journalLahanName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: ThemeColors.text,
-  },
-  journalDate: {
-    fontSize: 11,
-    color: ThemeColors.textSecondary,
-    marginTop: 1,
-  },
-  journalExpenseBadge: {
-    backgroundColor: ThemeColors.errorContainer,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-  },
-  journalExpenseText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: ThemeColors.loss,
-  },
-  journalObservationBadge: {
-    backgroundColor: ThemeColors.surfaceTintGreen,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-  },
-  journalObservationText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: ThemeColors.primary,
-  },
-  journalNoteBox: {
-    backgroundColor: ThemeColors.surfaceLow,
-    padding: Spacing.sm,
-    borderRadius: Radius.md,
-    marginTop: 4,
-  },
-  journalNoteText: {
-    fontSize: 13,
-    color: ThemeColors.text,
-    lineHeight: 18,
   },
 });

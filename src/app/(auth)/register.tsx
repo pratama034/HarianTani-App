@@ -11,17 +11,17 @@ import {
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { ThemeColors, Radius, Spacing } from '../../constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ThemeColors, Radius, Spacing, Shadows } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
-import { AppCard } from '../../components/AppCard';
 import { FormInput } from '../../components/FormInput';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { DarkSummaryCard } from '../../components/DarkSummaryCard';
 
-type FarmRole = 'Petani Mandiri' | 'Kelompok Tani' | 'Pekebun Sayur/Buah';
+type FarmRole = 'Petani Mandiri' | 'Gapoktan / Kelompok';
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { register } = useAuth();
 
   const [selectedRole, setSelectedRole] = useState<FarmRole>('Petani Mandiri');
@@ -44,15 +44,22 @@ export default function RegisterScreen() {
   };
 
   const getPasswordStrength = (pwd: string) => {
-    if (pwd.length === 0) return { score: 0, label: 'Masukkan kata sandi', color: ThemeColors.textMuted };
-    if (pwd.length < 6) return { score: 1, label: 'Cukup', color: ThemeColors.warning };
-    if (pwd.length < 9) return { score: 2, label: 'Kuat', color: ThemeColors.profit };
-    return { score: 3, label: 'Sangat Kuat', color: ThemeColors.profit };
+    if (pwd.length === 0)
+      return { score: 0, label: 'Masukkan Sandi', color: ThemeColors.textMuted };
+    if (pwd.length < 6)
+      return { score: 1, label: 'Cukup', color: ThemeColors.warning };
+    if (pwd.length < 9)
+      return { score: 3, label: 'Kuat', color: '#006C49' };
+    return { score: 4, label: 'Sangat Kuat', color: '#006C49' };
   };
 
   const strength = getPasswordStrength(password);
-  const passwordsMatch = password.length > 0 && confirmPassword.length > 0 && password === confirmPassword;
-  const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
+  const passwordsMatch =
+    password.length > 0 &&
+    confirmPassword.length > 0 &&
+    password === confirmPassword;
+  const passwordsMismatch =
+    confirmPassword.length > 0 && password !== confirmPassword;
 
   const handleRegister = async () => {
     setErrorMessage(null);
@@ -67,7 +74,9 @@ export default function RegisterScreen() {
     }
 
     if (!validateEmail(trimmedEmail)) {
-      setErrorMessage('Format email tidak valid. Gunakan format seperti nama@contoh.com.');
+      setErrorMessage(
+        'Format email tidak valid. Gunakan format seperti petani@hariantani.id.'
+      );
       return;
     }
 
@@ -82,7 +91,9 @@ export default function RegisterScreen() {
     }
 
     if (!agreedToTerms) {
-      setErrorMessage('Harap setujui Ketentuan Penggunaan dan Kebijakan Privasi.');
+      setErrorMessage(
+        'Harap setujui Ketentuan Penggunaan dan Kebijakan Privasi.'
+      );
       return;
     }
 
@@ -90,10 +101,12 @@ export default function RegisterScreen() {
     try {
       const res = await register(trimmedName, trimmedEmail, password);
       if (res.success) {
-        setSuccessMessage('Pendaftaran berhasil! Mengalihkan ke halaman masuk...');
+        setSuccessMessage(
+          'Pendaftaran berhasil! Mengalihkan ke halaman masuk...'
+        );
         setTimeout(() => {
           router.replace('/(auth)/login');
-        }, 1500);
+        }, 1400);
       } else {
         setErrorMessage(res.error || 'Gagal mendaftar akun.');
       }
@@ -104,20 +117,22 @@ export default function RegisterScreen() {
     }
   };
 
-  const roles: { role: FarmRole; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
-    { role: 'Petani Mandiri', icon: 'tractor' },
-    { role: 'Kelompok Tani', icon: 'account-group' },
-    { role: 'Pekebun Sayur/Buah', icon: 'sprout' },
-  ];
-
   return (
     <KeyboardAvoidingView
       style={styles.keyboardContainer}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <StatusBar style="light" />
-      {/* Top Fixed Signature Green Header Bar */}
-      <View style={styles.topHeaderBar}>
+
+      {/* Top Header Bar (#135D43) */}
+      <View
+        style={[
+          styles.topHeaderBar,
+          {
+            paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 44 : 24) + 8,
+          },
+        ]}
+      >
         <View style={styles.topHeaderLeft}>
           <TouchableOpacity
             style={styles.backButton}
@@ -127,20 +142,11 @@ export default function RegisterScreen() {
           >
             <MaterialCommunityIcons
               name="arrow-left"
-              size={22}
+              size={20}
               color="#FFFFFF"
             />
           </TouchableOpacity>
-          <View style={styles.headerBrandBadge}>
-            <View style={styles.headerLogoCircle}>
-              <MaterialCommunityIcons
-                name="sprout"
-                size={18}
-                color={ThemeColors.primary}
-              />
-            </View>
-            <Text style={styles.headerBrandText}>HarianTani</Text>
-          </View>
+          <Text style={styles.headerBrandText}>Registrasi Akun</Text>
         </View>
         <View style={styles.headerProfileCircle}>
           <MaterialCommunityIcons
@@ -152,54 +158,109 @@ export default function RegisterScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingBottom: Math.max(insets.bottom, 16) + 24,
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-
-        {/* Hero Visual Banner */}
+        {/* Visual Accent Ambient Header Flow */}
         <View style={styles.heroBanner}>
-          <View style={styles.heroTagRow}>
-            <View style={styles.heroTagIconBox}>
-              <MaterialCommunityIcons
-                name="spa"
-                size={14}
-                color={ThemeColors.primary}
-              />
-            </View>
+          <View style={styles.heroTagPill}>
+            <MaterialCommunityIcons name="leaf" size={14} color="#00714D" />
             <Text style={styles.heroTagText}>
-              Langkah Awal Digitalisasi Tani
+              LANGKAH AWAL DIGITALISASI TANI
             </Text>
           </View>
           <Text style={styles.heroTitle}>Daftar Akun Petani Baru</Text>
           <Text style={styles.heroDesc}>
-            Mulai kelola operasional dan keuangan usaha tani Anda secara rapi dan
-            digital.
+            Mulai kelola operasional dan keuangan usaha tani Anda secara rapi,
+            mandiri, dan digital.
           </Text>
         </View>
 
-        {/* Hardware & Security Trust Badge */}
+        {/* Security & Offline-Ready Cryptographic Guarantee Pill */}
         <View style={styles.securityTrustCard}>
-          <View style={styles.securityTrustLeft}>
-            <View style={styles.securityTrustIconBox}>
-              <MaterialCommunityIcons
-                name="shield-lock"
-                size={20}
-                color={ThemeColors.primary}
-              />
-            </View>
-            <View>
-              <Text style={styles.securityTrustTitle}>
-                Enkripsi Kriptografi Lokal
-              </Text>
-              <Text style={styles.securityTrustSubtitle}>
-                SHA-256 with Salt • Offline-Ready
-              </Text>
-            </View>
+          <View style={styles.securityTrustIconBox}>
+            <MaterialCommunityIcons
+              name="shield-check-outline"
+              size={19}
+              color={ThemeColors.primaryDark}
+            />
           </View>
-          <View style={styles.securityTrustBadge}>
-            <View style={styles.securityPulseDot} />
-            <Text style={styles.securityTrustBadgeText}>Aman</Text>
+          <View style={styles.securityTrustCol}>
+            <Text style={styles.securityTrustTitle}>
+              Enkripsi Kriptografi Lokal
+            </Text>
+            <Text style={styles.securityTrustSubtitle}>
+              SHA-256 with Salt • Offline-Ready Security
+            </Text>
+          </View>
+        </View>
+
+        {/* Segmented Farming Unit Choice */}
+        <View style={styles.segmentSection}>
+          <Text style={styles.segmentLabel}>Tipe Usaha Pertanian</Text>
+          <View style={styles.segmentTrack}>
+            <TouchableOpacity
+              style={[
+                styles.segmentButton,
+                selectedRole === 'Petani Mandiri' && styles.segmentButtonActive,
+              ]}
+              onPress={() => setSelectedRole('Petani Mandiri')}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons
+                name="account-outline"
+                size={17}
+                color={
+                  selectedRole === 'Petani Mandiri'
+                    ? '#FFFFFF'
+                    : ThemeColors.textSecondary
+                }
+              />
+              <Text
+                style={[
+                  styles.segmentButtonText,
+                  selectedRole === 'Petani Mandiri' &&
+                    styles.segmentButtonTextActive,
+                ]}
+              >
+                Petani Mandiri
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.segmentButton,
+                selectedRole === 'Gapoktan / Kelompok' &&
+                  styles.segmentButtonActive,
+              ]}
+              onPress={() => setSelectedRole('Gapoktan / Kelompok')}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons
+                name="account-group-outline"
+                size={17}
+                color={
+                  selectedRole === 'Gapoktan / Kelompok'
+                    ? '#FFFFFF'
+                    : ThemeColors.textSecondary
+                }
+              />
+              <Text
+                style={[
+                  styles.segmentButtonText,
+                  selectedRole === 'Gapoktan / Kelompok' &&
+                    styles.segmentButtonTextActive,
+                ]}
+              >
+                Gapoktan / Kelompok
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -208,8 +269,8 @@ export default function RegisterScreen() {
           <View style={styles.successContainer} accessibilityRole="alert">
             <MaterialCommunityIcons
               name="check-circle"
-              size={20}
-              color={ThemeColors.profit}
+              size={18}
+              color="#006C49"
             />
             <Text style={styles.successText}>{successMessage}</Text>
           </View>
@@ -220,62 +281,20 @@ export default function RegisterScreen() {
           <View style={styles.errorContainer} accessibilityRole="alert">
             <MaterialCommunityIcons
               name="alert-circle-outline"
-              size={20}
+              size={18}
               color={ThemeColors.loss}
             />
             <Text style={styles.errorText}>{errorMessage}</Text>
           </View>
         ) : null}
 
-        {/* Main Registration Form Card */}
-        <AppCard style={styles.formCard}>
-          {/* Farm Role Selector Chips */}
-          <View style={styles.roleSection}>
-            <Text style={styles.inputSectionLabel}>Tipe Usaha Tani Anda</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.roleChipsRow}
-            >
-              {roles.map((item) => {
-                const isActive = selectedRole === item.role;
-                return (
-                  <TouchableOpacity
-                    key={item.role}
-                    style={[
-                      styles.roleChip,
-                      isActive && styles.roleChipActive,
-                    ]}
-                    onPress={() => setSelectedRole(item.role)}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialCommunityIcons
-                      name={item.icon}
-                      size={18}
-                      color={
-                        isActive
-                          ? ThemeColors.onPrimary
-                          : ThemeColors.textSecondary
-                      }
-                      style={styles.roleChipIcon}
-                    />
-                    <Text
-                      style={[
-                        styles.roleChipText,
-                        isActive && styles.roleChipTextActive,
-                      ]}
-                    >
-                      {item.role}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+        {/* Registration Form Fields */}
+        <View style={styles.formSection}>
+          <View style={styles.labelRowBetween}>
+            <Text style={styles.fieldLabel}>Nama Lengkap Pemilik Lahan</Text>
+            <Text style={styles.requiredBadgeText}>Wajib</Text>
           </View>
-
-          {/* Full Name Field */}
           <FormInput
-            label="Nama Lengkap"
             placeholder="Contoh: Pak Budi Santoso"
             value={name}
             onChangeText={(text) => {
@@ -286,16 +305,18 @@ export default function RegisterScreen() {
             editable={!isSubmitting}
             leftIcon={
               <MaterialCommunityIcons
-                name="account-outline"
+                name="card-account-details-outline"
                 size={20}
                 color={ThemeColors.textMuted}
               />
             }
           />
 
-          {/* Email Field */}
+          <View style={styles.labelRowBetween}>
+            <Text style={styles.fieldLabel}>Alamat Email</Text>
+            <Text style={styles.optionalNoteText}>Untuk laporan</Text>
+          </View>
           <FormInput
-            label="Alamat Email"
             placeholder="petani@hariantani.id"
             value={email}
             onChangeText={(text) => {
@@ -307,7 +328,7 @@ export default function RegisterScreen() {
             autoCorrect={false}
             autoComplete="email"
             editable={!isSubmitting}
-            hint="Digunakan untuk pemulihan akun & laporan mingguan"
+            hint="Digunakan untuk pemulihan akun & unduh rekap panen mingguan."
             leftIcon={
               <MaterialCommunityIcons
                 name="email-outline"
@@ -317,10 +338,25 @@ export default function RegisterScreen() {
             }
           />
 
-          {/* Password Field */}
+          {/* Password Field with Strength Pill */}
+          <View style={styles.labelRowBetween}>
+            <Text style={styles.fieldLabel}>Kata Sandi Baru</Text>
+            <View style={styles.strengthPill}>
+              <View
+                style={[
+                  styles.strengthDot,
+                  { backgroundColor: strength.color },
+                ]}
+              />
+              <Text
+                style={[styles.strengthPillText, { color: strength.color }]}
+              >
+                {strength.label}
+              </Text>
+            </View>
+          </View>
           <FormInput
-            label="Kata Sandi"
-            placeholder="••••••••"
+            placeholder="Minimal 6 karakter"
             value={password}
             onChangeText={(text) => {
               setPassword(text);
@@ -330,6 +366,7 @@ export default function RegisterScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             editable={!isSubmitting}
+            containerStyle={{ marginBottom: 6 }}
             leftIcon={
               <MaterialCommunityIcons
                 name="lock-outline"
@@ -351,42 +388,27 @@ export default function RegisterScreen() {
             }
           />
 
-          {/* Password Strength Indicator Capsule */}
-          <View style={styles.strengthBox}>
-            <View style={styles.strengthBarRow}>
+          {/* 4-Bar Strength Meter */}
+          <View style={styles.strengthMeterRow}>
+            {[1, 2, 3, 4].map((barIdx) => (
               <View
+                key={barIdx}
                 style={[
                   styles.strengthBar,
-                  strength.score >= 1 && { backgroundColor: strength.color },
+                  strength.score >= barIdx && {
+                    backgroundColor: strength.color,
+                  },
                 ]}
               />
-              <View
-                style={[
-                  styles.strengthBar,
-                  strength.score >= 2 && { backgroundColor: strength.color },
-                ]}
-              />
-              <View
-                style={[
-                  styles.strengthBar,
-                  strength.score >= 3 && { backgroundColor: strength.color },
-                ]}
-              />
-              <Text style={[styles.strengthLabel, { color: strength.color }]}>
-                {strength.label}
-              </Text>
-            </View>
-            <MaterialCommunityIcons
-              name="shield-check-outline"
-              size={16}
-              color={strength.score >= 2 ? ThemeColors.profit : ThemeColors.textMuted}
-            />
+            ))}
           </View>
 
           {/* Confirm Password Field */}
+          <Text style={[styles.fieldLabel, { marginBottom: 6 }]}>
+            Ulangi Kata Sandi
+          </Text>
           <FormInput
-            label="Konfirmasi Kata Sandi"
-            placeholder="••••••••"
+            placeholder="Ulangi kata sandi"
             value={confirmPassword}
             onChangeText={(text) => {
               setConfirmPassword(text);
@@ -396,6 +418,7 @@ export default function RegisterScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             editable={!isSubmitting}
+            containerStyle={{ marginBottom: 6 }}
             leftIcon={
               <MaterialCommunityIcons
                 name="check-circle-outline"
@@ -417,110 +440,110 @@ export default function RegisterScreen() {
             }
           />
 
-          {/* Match Feedback Badge */}
           {passwordsMatch && (
-            <View style={styles.matchNotice}>
+            <View style={styles.matchStatusRow}>
               <MaterialCommunityIcons
-                name="check-circle"
+                name="check-all"
                 size={15}
-                color={ThemeColors.profit}
+                color="#006C49"
               />
-              <Text style={styles.matchNoticeText}>
-                Kata sandi cocok dan siap dienkripsi
+              <Text style={styles.matchStatusText}>
+                Kata sandi cocok & siap dienkripsi
               </Text>
             </View>
           )}
-
           {passwordsMismatch && (
-            <View style={[styles.matchNotice, styles.mismatchNotice]}>
+            <View style={styles.matchStatusRow}>
               <MaterialCommunityIcons
-                name="alert-circle"
+                name="alert-circle-outline"
                 size={15}
                 color={ThemeColors.loss}
               />
-              <Text style={[styles.matchNoticeText, styles.mismatchNoticeText]}>
-                Kata sandi belum sama
+              <Text style={[styles.matchStatusText, { color: ThemeColors.loss }]}>
+                Konfirmasi kata sandi belum cocok
               </Text>
             </View>
           )}
 
-          {/* Agreement Checkbox */}
+          {/* Terms and Consent Checkbox Card */}
           <TouchableOpacity
-            style={styles.termsRow}
+            style={styles.termsCard}
             onPress={() => setAgreedToTerms(!agreedToTerms)}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
             <View
               style={[
-                styles.checkboxBox,
-                agreedToTerms && styles.checkboxBoxChecked,
+                styles.termsCheckbox,
+                agreedToTerms && styles.termsCheckboxChecked,
               ]}
             >
               {agreedToTerms && (
                 <MaterialCommunityIcons
                   name="check"
                   size={14}
-                  color={ThemeColors.onPrimary}
+                  color="#FFFFFF"
                 />
               )}
             </View>
             <Text style={styles.termsText}>
               Saya menyetujui{' '}
-              <Text style={styles.termsLink}>Ketentuan Penggunaan</Text> &{' '}
-              <Text style={styles.termsLink}>Kebijakan Privasi Data Tani</Text>.
+              <Text style={styles.termsHighlight}>Ketentuan Penggunaan</Text> &{' '}
+              <Text style={styles.termsHighlight}>
+                Kebijakan Privasi Data Tani
+              </Text>{' '}
+              HarianTani.
             </Text>
           </TouchableOpacity>
 
-          {/* Submit Action CTA Button */}
+          {/* Offline Resilience Guarantee Card */}
+          <View style={styles.offlineGuaranteeCard}>
+            <View style={styles.offlineIconBox}>
+              <MaterialCommunityIcons
+                name="cloud-off-outline"
+                size={24}
+                color="#00714D"
+              />
+            </View>
+            <View style={styles.offlineTextCol}>
+              <View style={styles.offlineHeaderRow}>
+                <Text style={styles.offlineTitle}>100% Offline-First</Text>
+                <View style={styles.offlineBadge}>
+                  <Text style={styles.offlineBadgeText}>LOKAL</Text>
+                </View>
+              </View>
+              <Text style={styles.offlineDesc}>
+                Buku kas & timbangan panen tetap dapat dicatat tanpa jaringan
+                internet di tengah sawah.
+              </Text>
+            </View>
+          </View>
+
+          {/* Submit Action Button */}
           <PrimaryButton
             title="Daftarkan Akun Sekarang"
             onPress={handleRegister}
             loading={isSubmitting}
             rightIcon={
               <MaterialCommunityIcons
-                name="account-check"
-                size={20}
-                color={ThemeColors.onPrimary}
+                name="arrow-right"
+                size={19}
+                color="#FFFFFF"
               />
             }
             style={styles.submitButton}
           />
 
-          {/* Login Redirection Link */}
-          <View style={styles.loginRedirectRow}>
-            <Text style={styles.loginRedirectText}>Sudah punya akun?</Text>
+          {/* Navigation Link to Login */}
+          <View style={styles.loginFooterRow}>
+            <Text style={styles.loginFooterPrompt}>Sudah punya akun tani?</Text>
             <TouchableOpacity
               onPress={() => router.replace('/(auth)/login')}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.75}
             >
-              <Text style={styles.loginRedirectLink}>Masuk di Sini</Text>
+              <Text style={styles.loginFooterLink}>Masuk di Sini</Text>
             </TouchableOpacity>
           </View>
-        </AppCard>
-
-        {/* Telemetry Dark Pod: Local Offline Ready Status */}
-        <DarkSummaryCard style={styles.telemetryCard}>
-          <View style={styles.telemetryHeader}>
-            <View style={styles.telemetryTitleRow}>
-              <MaterialCommunityIcons
-                name="cloud-sync-outline"
-                size={18}
-                color={ThemeColors.secondaryFixed}
-              />
-              <Text style={styles.telemetryTitle}>
-                Penyimpanan Terdistribusi
-              </Text>
-            </View>
-            <Text style={styles.telemetryPercent}>100%</Text>
-          </View>
-          <View style={styles.progressBarTrack}>
-            <View style={styles.progressBarFill} />
-          </View>
-          <Text style={styles.telemetryDesc}>
-            Data panen dan buku kas Anda tetap aman dicatat tanpa sinyal internet
-            di tengah ladang.
-          </Text>
-        </DarkSummaryCard>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -531,372 +554,353 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: ThemeColors.background,
   },
-  scrollContent: {
-    paddingHorizontal: Spacing.margin,
-    paddingTop: Spacing.md,
-    paddingBottom: 40,
-  },
   topHeaderBar: {
-    backgroundColor: ThemeColors.headerBackground,
-    paddingTop: Platform.OS === 'ios' ? 48 : 20,
+    backgroundColor: '#135D43',
+    paddingTop: Platform.OS === 'ios' ? 50 : 38,
     paddingBottom: 14,
     paddingHorizontal: Spacing.margin,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#0D631B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
   topHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Spacing.sm,
-  },
-  headerBrandBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerLogoCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
   },
   headerBrandText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   headerProfileCircle: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: '#00442F',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.margin,
+    paddingTop: Spacing.lg,
+    paddingBottom: 40,
   },
   heroBanner: {
-    backgroundColor: ThemeColors.surfaceSageLight,
-    padding: Spacing.md,
-    borderRadius: Radius.xl,
-    marginBottom: Spacing.md,
+    marginBottom: 14,
   },
-  heroTagRow: {
+  heroTagPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
-  },
-  heroTagIconBox: {
-    width: 22,
-    height: 22,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(108, 248, 187, 0.30)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: Radius.full,
-    backgroundColor: ThemeColors.surfaceTintGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 6,
+    gap: 5,
+    marginBottom: 8,
   },
   heroTagText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: ThemeColors.primary,
-    letterSpacing: 0.3,
+    color: '#00714D',
+    letterSpacing: 0.5,
   },
   heroTitle: {
-    fontSize: 22,
+    fontSize: 25,
     fontWeight: '700',
     color: ThemeColors.text,
-    letterSpacing: -0.3,
-    marginBottom: 4,
+    letterSpacing: -0.5,
   },
   heroDesc: {
-    fontSize: 13,
+    fontSize: 14,
     color: ThemeColors.textSecondary,
-    lineHeight: 18,
+    lineHeight: 20,
+    marginTop: 4,
   },
   securityTrustCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: ThemeColors.surfaceLow,
-    padding: Spacing.sm + 4,
+    padding: 12,
     borderRadius: Radius.md,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: ThemeColors.border,
-  },
-  securityTrustLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    gap: 10,
+    marginBottom: 18,
+    ...Shadows.subtle,
   },
   securityTrustIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    backgroundColor: ThemeColors.surface,
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0, 68, 47, 0.10)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Spacing.sm,
+  },
+  securityTrustCol: {
+    flex: 1,
   },
   securityTrustTitle: {
-    fontSize: 13,
+    fontSize: 11.5,
     fontWeight: '700',
-    color: ThemeColors.text,
+    color: ThemeColors.primaryDark,
   },
   securityTrustSubtitle: {
-    fontSize: 11,
+    fontSize: 12,
     color: ThemeColors.textSecondary,
     marginTop: 1,
   },
-  securityTrustBadge: {
+  segmentSection: {
+    marginBottom: 18,
+  },
+  segmentLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: ThemeColors.text,
+    marginBottom: 8,
+  },
+  segmentTrack: {
+    flexDirection: 'row',
+    backgroundColor: ThemeColors.surfaceHigh,
+    padding: 4,
+    borderRadius: Radius.md,
+    gap: 4,
+  },
+  segmentButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: ThemeColors.surfaceTintGreen,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 9,
+    gap: 6,
   },
-  securityPulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: ThemeColors.profit,
-    marginRight: 4,
+  segmentButtonActive: {
+    backgroundColor: '#135D43',
+    ...Shadows.subtle,
   },
-  securityTrustBadgeText: {
-    fontSize: 11,
+  segmentButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: ThemeColors.textSecondary,
+  },
+  segmentButtonTextActive: {
+    color: '#FFFFFF',
     fontWeight: '700',
-    color: ThemeColors.primary,
   },
   successContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: '#C8E6C9',
-    padding: Spacing.sm + 2,
+    borderColor: '#A7F3D0',
     borderRadius: Radius.md,
-    marginBottom: Spacing.md,
+    padding: 12,
+    marginBottom: 14,
+    gap: 8,
   },
   successText: {
-    color: ThemeColors.profit,
-    fontSize: 13,
-    fontWeight: '600',
-    marginLeft: 8,
     flex: 1,
+    fontSize: 12.5,
+    color: '#005139',
+    fontWeight: '600',
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFEBEE',
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: '#FFCDD2',
-    padding: Spacing.sm + 2,
+    borderColor: '#FECACA',
     borderRadius: Radius.md,
-    marginBottom: Spacing.md,
+    padding: 12,
+    marginBottom: 14,
+    gap: 8,
   },
   errorText: {
-    color: ThemeColors.loss,
-    fontSize: 13,
-    fontWeight: '600',
-    marginLeft: 8,
     flex: 1,
-  },
-  formCard: {
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-  },
-  roleSection: {
-    marginBottom: Spacing.md,
-  },
-  inputSectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: ThemeColors.text,
-    marginBottom: Spacing.xs + 2,
-  },
-  roleChipsRow: {
-    paddingVertical: 2,
-  },
-  roleChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 44,
-    paddingHorizontal: Spacing.md,
-    borderRadius: Radius.full,
-    backgroundColor: ThemeColors.surfaceLow,
-    marginRight: Spacing.sm,
-  },
-  roleChipActive: {
-    backgroundColor: ThemeColors.primary,
-  },
-  roleChipIcon: {
-    marginRight: 6,
-  },
-  roleChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: ThemeColors.textSecondary,
-  },
-  roleChipTextActive: {
-    color: ThemeColors.onPrimary,
-  },
-  strengthBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: ThemeColors.surfaceLow,
-    paddingHorizontal: Spacing.sm + 2,
-    paddingVertical: 6,
-    borderRadius: Radius.sm,
-    marginTop: -8,
-    marginBottom: Spacing.md,
-  },
-  strengthBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  strengthBar: {
-    width: 22,
-    height: 5,
-    borderRadius: Radius.full,
-    backgroundColor: ThemeColors.border,
-    marginRight: 4,
-  },
-  strengthLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    marginLeft: 6,
-  },
-  matchNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: -8,
-    marginBottom: Spacing.sm,
-  },
-  matchNoticeText: {
-    fontSize: 12,
-    color: ThemeColors.profit,
-    fontWeight: '500',
-    marginLeft: 5,
-  },
-  mismatchNotice: {
-    opacity: 0.9,
-  },
-  mismatchNoticeText: {
+    fontSize: 12.5,
     color: ThemeColors.loss,
+    fontWeight: '600',
   },
-  termsRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 4,
-    marginBottom: Spacing.lg,
-  },
-  checkboxBox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: ThemeColors.border,
-    backgroundColor: ThemeColors.surfaceLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.sm,
+  formSection: {
     marginTop: 2,
   },
-  checkboxBoxChecked: {
-    backgroundColor: ThemeColors.primary,
-    borderColor: ThemeColors.primary,
-  },
-  termsText: {
-    fontSize: 12,
-    color: ThemeColors.textSecondary,
-    lineHeight: 18,
-    flex: 1,
-  },
-  termsLink: {
-    color: ThemeColors.primary,
-    fontWeight: '700',
-  },
-  submitButton: {
-    marginBottom: Spacing.md,
-  },
-  loginRedirectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: Spacing.xs,
-  },
-  loginRedirectText: {
-    fontSize: 13,
-    color: ThemeColors.textSecondary,
-    marginRight: 4,
-  },
-  loginRedirectLink: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: ThemeColors.primary,
-  },
-  telemetryCard: {
-    marginBottom: Spacing.md,
-  },
-  telemetryHeader: {
+  labelRowBetween: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 6,
   },
-  telemetryTitleRow: {
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: ThemeColors.text,
+  },
+  requiredBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: ThemeColors.primaryDark,
+  },
+  optionalNoteText: {
+    fontSize: 11.5,
+    color: ThemeColors.textMuted,
+  },
+  strengthPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(108, 248, 187, 0.35)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    gap: 5,
   },
-  telemetryTitle: {
-    fontSize: 13,
+  strengthDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  strengthPillText: {
+    fontSize: 10.5,
     fontWeight: '700',
-    color: ThemeColors.onDark,
-    marginLeft: 6,
   },
-  telemetryPercent: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: ThemeColors.secondaryFixed,
+  strengthMeterRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 16,
+    paddingHorizontal: 2,
   },
-  progressBarTrack: {
-    width: '100%',
+  strengthBar: {
+    flex: 1,
     height: 5,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    marginBottom: 8,
-    overflow: 'hidden',
+    backgroundColor: '#DAE2FD',
   },
-  progressBarFill: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: ThemeColors.secondaryFixed,
-    borderRadius: Radius.full,
+  matchStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 14,
+    paddingHorizontal: 2,
   },
-  telemetryDesc: {
+  matchStatusText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#006C49',
+  },
+  termsCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: ThemeColors.border,
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 14,
+    ...Shadows.subtle,
+  },
+  termsCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: '#DAE2FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  termsCheckboxChecked: {
+    backgroundColor: '#135D43',
+  },
+  termsText: {
+    flex: 1,
+    fontSize: 13,
+    color: ThemeColors.text,
+    lineHeight: 19,
+  },
+  termsHighlight: {
+    fontWeight: '700',
+    color: ThemeColors.primaryDark,
+  },
+  offlineGuaranteeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: ThemeColors.surfaceLow,
+    padding: 15,
+    borderRadius: Radius.lg,
+    gap: 14,
+    marginBottom: 20,
+    ...Shadows.subtle,
+  },
+  offlineIconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(108, 248, 187, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offlineTextCol: {
+    flex: 1,
+  },
+  offlineHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  offlineTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: ThemeColors.text,
+  },
+  offlineBadge: {
+    backgroundColor: '#ABF1CF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  offlineBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#002115',
+  },
+  offlineDesc: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: ThemeColors.textSecondary,
     lineHeight: 17,
+    marginTop: 3,
+  },
+  submitButton: {
+    marginBottom: 14,
+  },
+  loginFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  loginFooterPrompt: {
+    fontSize: 13.5,
+    color: ThemeColors.textSecondary,
+  },
+  loginFooterLink: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: ThemeColors.primaryDark,
   },
 });

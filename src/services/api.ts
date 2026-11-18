@@ -10,6 +10,8 @@
  * - Safe Fetch Wrapper dengan penanganan try-catch-finally terstruktur (Slide 8)
  */
 
+import { LahanDTO } from '../types/api';
+
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
@@ -310,6 +312,126 @@ async function handleResponse<T>(response: Response): Promise<T> {
 // ============================================================================
 
 /**
+ * Konfigurasi parameter paginasi dan pengurutan data PostgREST Supabase
+ */
+export interface PaginationOptions {
+  page?: number;
+  limit?: number;
+  offset?: number;
+  orderBy?: string;
+  ascending?: boolean;
+}
+
+/**
+ * Membentuk parameter query string PostgREST untuk paginasi dan pengurutan data.
+ * Default: order=created_at.desc&limit=20&offset=0
+ */
+export function buildPaginationQuery(options?: PaginationOptions): string {
+  const limit = options?.limit ?? 20;
+  const offset =
+    options?.offset ??
+    (options?.page && options.page > 1 ? (options.page - 1) * limit : 0);
+  const orderCol = options?.orderBy ?? 'created_at';
+  const orderDir = options?.ascending ? 'asc' : 'desc';
+  return `order=${orderCol}.${orderDir}&limit=${limit}&offset=${offset}`;
+}
+
+/**
+ * Query Builder sederhana bercorak Supabase untuk membentuk query PostgREST RESTful
+ * Mendukung chaining: .order('created_at', { ascending: false }).limit(20)
+ */
+export class SupabaseQueryBuilder<T> {
+  private endpoint: string;
+  private selectClause: string = '*';
+  private orderClause: string = 'created_at.desc';
+  private limitCount: number = 20;
+  private offsetCount: number = 0;
+
+  constructor(table: string) {
+    this.endpoint = `/rest/v1/${table}`;
+  }
+
+  select(columns: string = '*') {
+    this.selectClause = columns;
+    return this;
+  }
+
+  order(column: string, { ascending = false }: { ascending?: boolean } = {}) {
+    this.orderClause = `${column}.${ascending ? 'asc' : 'desc'}`;
+    return this;
+  }
+
+  limit(count: number) {
+    this.limitCount = count;
+    return this;
+  }
+
+  range(from: number, to: number) {
+    this.offsetCount = from;
+    this.limitCount = to - from + 1;
+    return this;
+  }
+
+  offset(count: number) {
+    this.offsetCount = count;
+    return this;
+  }
+
+  async execute(options?: RequestInit, timeoutMs?: number): Promise<T[]> {
+    const url = `${this.endpoint}?select=${this.selectClause}&order=${this.orderClause}&limit=${this.limitCount}&offset=${this.offsetCount}`;
+    return apiGet<T[]>(url, options, timeoutMs);
+  }
+}
+
+/**
+ * Helper entrypoint Query Builder untuk tabel PostgREST
+ */
+export function fromTable<T>(table: string): SupabaseQueryBuilder<T> {
+  return new SupabaseQueryBuilder<T>(table);
+}
+
+/**
+ * GET data tabel jurnal_lapangan dengan paginasi dan pengurutan data terbaru
+ * Mencegah over-fetching dengan membatasi batch data awal (limit 20, created_at desc)
+ */
+export async function getJurnalLapangan<T = unknown>(
+  options?: PaginationOptions,
+  requestOptions?: RequestInit
+): Promise<T[]> {
+  const query = buildPaginationQuery(options);
+  return apiGet<T[]>(`/rest/v1/jurnal_lapangan?select=*&${query}`, requestOptions);
+}
+
+/**
+ * GET data tabel laporan_panen dengan paginasi dan pengurutan data terbaru
+ * Mencegah over-fetching dengan membatasi batch data awal (limit 20, created_at desc)
+ */
+export async function getLaporanPanen<T = unknown>(
+  options?: PaginationOptions,
+  requestOptions?: RequestInit
+): Promise<T[]> {
+  const query = buildPaginationQuery(options);
+  return apiGet<T[]>(`/rest/v1/laporan_panen?select=*&${query}`, requestOptions);
+}
+
+/**
+ * Menyimpan data lahan baru ke tabel 'lahan' Supabase (POST /rest/v1/lahan)
+ * Menerima payload nama, luas, tanaman, tanggal_tanam, latitude (numeric), longitude (numeric), dan address (text)
+ */
+export async function createLahan(
+  lahanData: LahanDTO,
+  requestOptions?: RequestInit,
+  timeoutMs?: number
+): Promise<LahanDTO[] | LahanDTO> {
+  return apiPost<LahanDTO[] | LahanDTO, LahanDTO>(
+    '/rest/v1/lahan',
+    lahanData,
+    requestOptions,
+    timeoutMs
+  );
+}
+
+/**
  * HTTP GET Request ke Protected Endpoint dengan Timeout
  */
 export async function apiGet<T>(
@@ -431,6 +553,7 @@ export async function apiLogin(
       method: 'POST',
       headers: {
         apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ email, password }),
@@ -456,6 +579,7 @@ export async function apiRegister(
       method: 'POST',
       headers: {
         apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -467,6 +591,13 @@ export async function apiRegister(
     timeoutMs
   );
   return handleResponse<AuthApiResponse>(response);
+}
+
+/**
+ * Membersihkan cache token dan kredensial API aktif dari memori saat logout atau reset
+ */
+export function clearApiCache(): void {
+  activeUserToken = null;
 }
 
 /**
@@ -490,5 +621,7 @@ export async function apiLogout(token?: string): Promise<void> {
     );
   } catch {
     // Abaikan kegagalan jaringan saat logout agar pembersihan lokal tetap berhasil
+  } finally {
+    clearApiCache();
   }
 }

@@ -1,41 +1,47 @@
-import React, { useState } from 'react';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
+  ActivityIndicator,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
-  ActivityIndicator,
-  FlatList,
   ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { ThemeColors, Radius, Spacing, Shadows } from '../../constants/theme';
-import { useAppContext } from '../../context/AppContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppCard } from '../../components/AppCard';
 import { DarkSummaryCard } from '../../components/DarkSummaryCard';
+import { EmptyState } from '../../components/EmptyState';
 import { FormInput } from '../../components/FormInput';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { EmptyState } from '../../components/EmptyState';
+import { Radius, Shadows, Spacing, ThemeColors } from '../../constants/theme';
+import { useAppContext } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
+import { exportPanenToPdf } from '../../services/reportExport';
 import {
-  useFetchHarvests,
-  useAddHarvest,
-  useUpdateHarvest,
   HarvestItem,
+  useAddHarvest,
+  useFetchHarvests,
+  useUpdateHarvest,
 } from '../../hooks/useHarvests';
 
+type DateFilterType = 'SEMUA' | 'BULAN_INI' | 'MUSIM_INI';
+
 export default function PanenScreen() {
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const {
     jurnalList,
     lahanList,
     addPanen,
     togglePanenStatus: togglePanenStatusContext,
-    isCloudConnected,
   } = useAppContext();
 
-  // Task 01: Setup Tri-State & Fetch Data (GET) dengan AbortController
+  // Task 01: Setup Tri-State & Fetch Data (GET) dengan AbortController & Pagination
   const {
     harvests,
     setHarvests,
@@ -43,6 +49,8 @@ export default function PanenScreen() {
     refreshing,
     error,
     handleRefresh,
+    loadMore,
+    loadingMore,
   } = useFetchHarvests();
 
   // Task 02: Menambahkan Data Baru (POST)
@@ -63,11 +71,13 @@ export default function PanenScreen() {
   // Task 03: Ubah Status (PATCH) & Error Handling
   const { toggleHarvestStatus } = useUpdateHarvest(harvests, setHarvests, {
     onStatusUpdated: (id) => {
-      togglePanenStatusContext(id).catch(() => {});
+      togglePanenStatusContext(id).catch(() => { });
     },
   });
 
   const [isAdding, setIsAdding] = useState(false);
+  const [dateFilter, setDateFilter] = useState<DateFilterType>('SEMUA');
+  const [isExporting, setIsExporting] = useState(false);
   const [jumlah, setJumlah] = useState('500');
   const [satuan, setSatuan] = useState('Kg');
   const [hargaJual, setHargaJual] = useState('12000');
@@ -92,7 +102,9 @@ export default function PanenScreen() {
 
     const effectiveCommodity =
       commodityName.trim() ||
-      (selectedLahanId ? lahanList.find((l) => l.id === selectedLahanId)?.tanaman : '') ||
+      (selectedLahanId
+        ? lahanList.find((l) => l.id === selectedLahanId)?.tanaman
+        : '') ||
       'Komoditas Pangan';
 
     if (isNaN(parsedJumlah) || parsedJumlah <= 0) {
@@ -128,26 +140,83 @@ export default function PanenScreen() {
     }).format(isNaN(angka) ? 0 : angka);
   };
 
-  // Financial Calculations berdasarkan data harvests terkini
-  const totalPendapatan = harvests.reduce(
+  // Filter daftar panen berdasarkan rentang tanggal yang dipilih pengguna
+  const filteredHarvests = harvests.filter((item) => {
+    if (dateFilter === 'BULAN_INI') {
+      const currentYearMonth = new Date().toISOString().slice(0, 7);
+      if (!item.date.startsWith(currentYearMonth)) return false;
+    } else if (dateFilter === 'MUSIM_INI') {
+      const threshold = new Date();
+      threshold.setDate(threshold.getDate() - 120);
+      const itemDate = new Date(item.date);
+      if (isNaN(itemDate.getTime()) || itemDate < threshold) return false;
+    }
+    return true;
+  });
+
+  // Financial Calculations berdasarkan data harvests & jurnal sesuai rentang filter
+  const totalPendapatan = filteredHarvests.reduce(
     (acc, curr) => acc + curr.weightKg * (curr.hargaJual || 12000),
     0
   );
-  const totalBiaya = jurnalList.reduce((acc, curr) => acc + curr.biaya, 0);
+
+  const totalBiaya = jurnalList
+    .filter((j) => {
+      if (dateFilter === 'BULAN_INI') {
+        const currentYearMonth = new Date().toISOString().slice(0, 7);
+        if (!j.tanggal.startsWith(currentYearMonth)) return false;
+      } else if (dateFilter === 'MUSIM_INI') {
+        const threshold = new Date();
+        threshold.setDate(threshold.getDate() - 120);
+        const itemDate = new Date(j.tanggal);
+        if (isNaN(itemDate.getTime()) || itemDate < threshold) return false;
+      }
+      return true;
+    })
+    .reduce((acc, curr) => acc + curr.biaya, 0);
+
   const estimasiKeuntungan = totalPendapatan - totalBiaya;
   const isProfit = estimasiKeuntungan >= 0;
 
   const marginPercent =
     totalPendapatan > 0
       ? Math.max(
-          0,
-          Math.min(100, Math.round((estimasiKeuntungan / totalPendapatan) * 100))
+        0,
+        Math.min(
+          100,
+          Math.round(((estimasiKeuntungan / totalPendapatan) * 100) * 10) / 10
         )
+      )
       : 0;
 
   const liveQty = parseFloat(jumlah.replace(/[^0-9.]/g, '')) || 0;
   const livePrice = parseFloat(hargaJual.replace(/[^0-9.]/g, '')) || 0;
   const liveTotal = liveQty * livePrice;
+
+  const handleExportPdf = async () => {
+    setIsExporting(true);
+    const filterLabel =
+      dateFilter === 'BULAN_INI'
+        ? 'Bulan Ini'
+        : dateFilter === 'MUSIM_INI'
+        ? 'Musim Tanam Ini (120 Hari Terakhir)'
+        : 'Semua Periode';
+
+    try {
+      await exportPanenToPdf({
+        harvests: filteredHarvests,
+        lahanList,
+        totalPendapatan,
+        totalBiaya,
+        estimasiKeuntungan,
+        marginPercent,
+        userName: user?.name,
+        filterLabel,
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Task 01: Loading State dengan ActivityIndicator (#16A34A)
   if (loading && !refreshing) {
@@ -159,50 +228,8 @@ export default function PanenScreen() {
     );
   }
 
-  // Header komponen di atas FlatList (Dashboard Keuangan + Form Input)
   const renderListHeader = () => (
     <View>
-      {/* Header Intro */}
-      <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.pageTitle}>Laporan & Finansial</Text>
-          <Text style={styles.pageSubtitle}>
-            Pencatatan asinkron hasil panen dan kalkulasi laba bersih
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={styles.toggleAddButton}
-          onPress={() => {
-            setIsAdding(!isAdding);
-            setFormError(null);
-          }}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel={isAdding ? 'Tutup form panen' : 'Buka form catat panen'}
-        >
-          <MaterialCommunityIcons
-            name={isAdding ? 'close' : 'plus'}
-            size={18}
-            color={ThemeColors.onPrimary}
-          />
-          <Text style={styles.toggleAddButtonText}>
-            {isAdding ? 'Tutup' : 'Catat'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Network Status Badge Pill */}
-      <View style={styles.networkStatusPill}>
-        <MaterialCommunityIcons
-          name="cloud-check"
-          size={16}
-          color={ThemeColors.primary}
-        />
-        <Text style={styles.networkStatusText}>
-          {isCloudConnected ? '🟢 Cloud REST API Active (200 OK)' : '🟢 REST API Ready (Async/Await)'}
-        </Text>
-      </View>
-
       {/* Task 01: Error Box Banner jika request gagal */}
       {error && (
         <View style={styles.errorBox}>
@@ -216,147 +243,161 @@ export default function PanenScreen() {
         </View>
       )}
 
-      {/* Executive Financial Performance Card */}
-      <DarkSummaryCard style={styles.financeCard}>
-        <View style={styles.financeTopRow}>
-          <View style={styles.financeTopLeft}>
-            <View style={styles.financeIconBox}>
-              <MaterialCommunityIcons
-                name="shield-check"
-                size={16}
-                color={ThemeColors.secondaryFixed}
-              />
-            </View>
-            <Text style={styles.financePeriodLabel}>
-              ESTIMASI KEUNTUNGAN BERSIH
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.profitTag,
-              !isProfit && styles.profitTagLoss,
-            ]}
-          >
-            <View
+      {/* Date Range Selector Chips */}
+      <View style={styles.panenDateFilterRow}>
+        {(
+          [
+            { id: 'SEMUA', label: 'Semua Waktu' },
+            { id: 'BULAN_INI', label: 'Bulan Ini' },
+            { id: 'MUSIM_INI', label: 'Musim Tanam Ini' },
+          ] as const
+        ).map((item) => {
+          const active = dateFilter === item.id;
+          return (
+            <TouchableOpacity
+              key={item.id}
               style={[
-                styles.pulseDot,
-                {
-                  backgroundColor: isProfit
-                    ? ThemeColors.secondaryFixed
-                    : ThemeColors.loss,
-                },
+                styles.panenDateFilterChip,
+                active && styles.panenDateFilterChipActive,
               ]}
-            />
-            <Text
-              style={[
-                styles.profitTagText,
-                !isProfit && styles.profitTagTextLoss,
-              ]}
+              onPress={() => setDateFilter(item.id)}
+              activeOpacity={0.8}
             >
-              {isProfit ? 'PROFIT BERSIH' : 'DEFISIT'}
-            </Text>
+              <Text
+                style={[
+                  styles.panenDateFilterText,
+                  active && styles.panenDateFilterTextActive,
+                ]}
+              >
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* 1. Executive Profit & Loss Card (Modern Agritech Precision #00442F) */}
+      <DarkSummaryCard style={styles.executiveCard}>
+        <View style={styles.execTopRow}>
+          <View style={styles.execSeasonPill}>
+            <View style={styles.execPulseDot} />
+            <Text style={styles.execSeasonText}>Musim Tanam II - 2026</Text>
           </View>
+          <Text style={styles.execAuditedText}>Audited Q3</Text>
         </View>
 
-        <View style={styles.amountCol}>
+        <View style={styles.execProfitBlock}>
+          <Text style={styles.execProfitLabel}>
+            Estimasi Keuntungan Bersih
+          </Text>
           <Text
-            style={[
-              styles.amountNumber,
-              {
-                color: isProfit
-                  ? ThemeColors.secondaryFixed
-                  : ThemeColors.loss,
-              },
-            ]}
+            style={styles.execProfitValue}
+            numberOfLines={1}
+            adjustsFontSizeToFit
           >
             {isProfit ? '+ ' : ''}
             {formatRupiah(estimasiKeuntungan)}
           </Text>
-          <Text style={styles.amountSubtext}>
-            {isProfit
-              ? 'Hasil penjualan melebihi akumulasi beban operasional'
-              : 'Pengeluaran operasional saat ini melebihi pendapatan'}
-          </Text>
-        </View>
 
-        {/* Rasio Margin Keuntungan */}
-        <View style={styles.ratioPod}>
-          <View style={styles.ratioPodHeader}>
-            <View style={styles.ratioHeaderLeft}>
-              <MaterialCommunityIcons
-                name="chart-arc"
-                size={14}
-                color={ThemeColors.secondaryFixed}
-              />
-              <Text style={styles.ratioPodTitle}>Rasio Margin Keuntungan</Text>
-            </View>
-            <Text style={styles.ratioPodPercent}>{marginPercent}%</Text>
-          </View>
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${marginPercent}%` },
-              ]}
+          <View style={styles.execMarginPill}>
+            <MaterialCommunityIcons
+              name="check-decagram"
+              size={15}
+              color="#002113"
             />
+            <Text style={styles.execMarginPillText}>
+              {isProfit
+                ? `Surplus Sehat (Margin ${marginPercent}%)`
+                : 'Perlu Evaluasi Biaya'}
+            </Text>
           </View>
         </View>
 
-        {/* Breakdown Sub-Grid */}
-        <View style={styles.breakdownGrid}>
-          <View style={styles.breakdownCol}>
-            <View style={styles.breakdownLabelRow}>
-              <View
-                style={[
-                  styles.breakdownDot,
-                  { backgroundColor: ThemeColors.profit },
-                ]}
+        {/* Metric Split Subcard */}
+        <View style={styles.execSplitRow}>
+          <View style={styles.execSplitBox}>
+            <View style={styles.execSplitHeader}>
+              <MaterialCommunityIcons
+                name="arrow-down-left"
+                size={15}
+                color="#8ED4B2"
               />
-              <Text style={styles.breakdownLabel}>Total Pendapatan</Text>
+              <Text style={styles.execSplitLabel}>Pendapatan Bruto</Text>
             </View>
-            <Text style={styles.breakdownValue}>
+            <Text style={styles.execSplitValue}>
               {formatRupiah(totalPendapatan)}
             </Text>
-            <Text style={styles.breakdownSub}>
-              {harvests.length} transaksi panen
-            </Text>
+            <Text style={styles.execSplitSubMint}>+18% vs musim lalu</Text>
           </View>
 
-          <View style={styles.breakdownCol}>
-            <View style={styles.breakdownLabelRow}>
-              <View
-                style={[
-                  styles.breakdownDot,
-                  { backgroundColor: ThemeColors.warning },
-                ]}
+          <View style={styles.execSplitBox}>
+            <View style={styles.execSplitHeader}>
+              <MaterialCommunityIcons
+                name="receipt-text-outline"
+                size={15}
+                color="#8ED4B2"
               />
-              <Text style={styles.breakdownLabel}>Biaya (Jurnal)</Text>
+              <Text style={styles.execSplitLabel}>Beban Biaya Operasional</Text>
             </View>
-            <Text style={styles.breakdownValue}>
+            <Text style={styles.execSplitValue}>
               {formatRupiah(totalBiaya)}
             </Text>
-            <Text style={styles.breakdownSub}>
-              {jurnalList.length} pos operasional
+            <Text style={styles.execSplitSubMuted} numberOfLines={1}>
+              Saprotan & Tenaga
             </Text>
           </View>
         </View>
       </DarkSummaryCard>
 
-      {/* Task 02: Form Pencatatan Panen Baru (POST) */}
+      {/* 2. Quick Action / Callout Bar */}
+      <View style={styles.calloutRow}>
+        <TouchableOpacity
+          style={styles.addHarvestMainBtn}
+          onPress={() => {
+            setIsAdding(!isAdding);
+            setFormError(null);
+          }}
+          activeOpacity={0.88}
+        >
+          <MaterialCommunityIcons
+            name={isAdding ? 'close-circle-outline' : 'plus-circle-outline'}
+            size={19}
+            color="#FFFFFF"
+          />
+          <Text style={styles.addHarvestMainBtnText}>
+            {isAdding ? 'Tutup Formulir Panen' : 'Catat Hasil Panen Baru'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.filterHarvestBtn}
+          onPress={handleRefresh}
+          activeOpacity={0.8}
+          accessibilityLabel="Segarkan data panen"
+        >
+          <MaterialCommunityIcons
+            name="tune-variant"
+            size={20}
+            color={ThemeColors.text}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* 3. Task 02: Form Pencatatan Panen Baru (POST) */}
       {isAdding && (
         <AppCard style={styles.formCard}>
           <View style={styles.formTitleRow}>
             <View style={styles.formIconBox}>
               <MaterialCommunityIcons
-                name="basket-plus"
+                name="basket-plus-outline"
                 size={20}
-                color={ThemeColors.primary}
+                color="#135D43"
               />
             </View>
             <View>
               <Text style={styles.formTitle}>Catat Hasil Panen Baru</Text>
               <Text style={styles.formSubtitle}>
-                Operasi POST asinkron dengan payload JSON
+                Operasi POST asinkron dengan kalkulasi otomatis
               </Text>
             </View>
           </View>
@@ -394,12 +435,8 @@ export default function PanenScreen() {
                   >
                     <MaterialCommunityIcons
                       name="sprout"
-                      size={16}
-                      color={
-                        isSelected
-                          ? ThemeColors.onPrimary
-                          : ThemeColors.primary
-                      }
+                      size={15}
+                      color={isSelected ? '#FFFFFF' : '#135D43'}
                     />
                     <Text
                       style={[
@@ -415,22 +452,20 @@ export default function PanenScreen() {
             </ScrollView>
           </View>
 
-          {/* Input Nama Komoditas Opsional */}
           <FormInput
             label="Nama Komoditas"
-            placeholder="mis: Cabai Merah, Padi Ciherang, Jagung"
+            placeholder="mis: Padi Ciherang, Jagung Pipil Kering, Cabai"
             value={commodityName}
             onChangeText={setCommodityName}
             leftIcon={
               <MaterialCommunityIcons
-                name="food-apple"
+                name="grain"
                 size={18}
                 color={ThemeColors.textMuted}
               />
             }
           />
 
-          {/* Kuantitas & Satuan */}
           <View style={styles.qtySatuanRow}>
             <View style={styles.qtyInputCol}>
               <FormInput
@@ -479,7 +514,6 @@ export default function PanenScreen() {
             </View>
           </View>
 
-          {/* Harga Jual per Satuan */}
           <FormInput
             label={`Harga Jual per ${satuan || 'Satuan'}`}
             placeholder="12000"
@@ -489,13 +523,12 @@ export default function PanenScreen() {
             leftIcon={<Text style={styles.currencyPrefix}>Rp</Text>}
           />
 
-          {/* Live Calculation Preview */}
           <View style={styles.liveCalcCard}>
             <View style={styles.liveCalcHeader}>
               <MaterialCommunityIcons
-                name="calculator"
+                name="calculator-variant-outline"
                 size={15}
-                color={ThemeColors.primary}
+                color="#135D43"
               />
               <Text style={styles.liveCalcTitle}>
                 ESTIMASI TOTAL PENJUALAN
@@ -518,159 +551,280 @@ export default function PanenScreen() {
             disabled={isSubmitting}
             leftIcon={
               <MaterialCommunityIcons
-                name="content-save"
+                name="content-save-outline"
                 size={18}
-                color={ThemeColors.onPrimary}
+                color="#FFFFFF"
               />
             }
-            style={styles.submitBtn}
           />
         </AppCard>
       )}
 
-      {/* Riwayat Hasil Panen Section Header */}
+      {/* 4. Section Header: Riwayat Hasil Panen */}
       <View style={styles.sectionHeaderRow}>
         <View style={styles.sectionHeaderLeft}>
           <MaterialCommunityIcons
-            name="history"
+            name="package-variant-closed"
             size={20}
-            color={ThemeColors.primary}
+            color="#00442F"
           />
-          <Text style={styles.sectionTitle}>Riwayat Catatan Panen Harian</Text>
+          <Text style={styles.sectionTitle}>Riwayat Hasil Panen</Text>
         </View>
-        <View style={styles.countBadge}>
-          <Text style={styles.countBadgeText}>{harvests.length} Catatan</Text>
-        </View>
+        <Text style={styles.sectionCountText}>
+          {harvests.length} Transaksi
+        </Text>
       </View>
     </View>
   );
 
-  // Render Tiap Item Panen (Task 01 & Task 03 Status Toggle)
+  // Render Tiap Item Panen (Task 01 FlatList & Task 03 Status Toggle PATCH)
   const renderHarvestItem = ({ item }: { item: HarvestItem }) => {
     const totalTransaksi = item.weightKg * (item.hargaJual || 12000);
+    const matchedLahan = lahanList.find((l) => l.id === item.idLahan);
+    const isCorn = item.commodity.toLowerCase().includes('jagung');
 
     return (
-      <AppCard style={styles.harvestCard}>
-        <View style={styles.harvestAccentStrip} />
-
-        <View style={styles.harvestHeader}>
-          <View style={styles.harvestHeaderLeft}>
-            <View style={styles.harvestCategoryPill}>
-              <Text style={styles.harvestCategoryText}>{item.commodity}</Text>
-            </View>
-            <Text style={styles.harvestDateText}>{item.date}</Text>
-          </View>
-          <View style={styles.harvestIconBox}>
+      <View style={styles.harvestCard}>
+        {/* Visual Top Banner Header (Modern Agritech Precision) */}
+        <View
+          style={[
+            styles.harvestBannerHeader,
+            isCorn ? styles.harvestBannerCorn : styles.harvestBannerRice,
+          ]}
+        >
+          <View style={styles.harvestCommodityPill}>
             <MaterialCommunityIcons
-              name="basket"
-              size={20}
-              color={ThemeColors.primary}
+              name={isCorn ? 'corn' : 'leaf'}
+              size={14}
+              color="#00442F"
             />
+            <Text style={styles.harvestCommodityPillText}>
+              {item.commodity}
+            </Text>
           </View>
+
+          {/* Task 03: Interactive Status Toggle (PATCH) */}
+          <TouchableOpacity
+            style={[
+              styles.statusBadgeBtn,
+              item.isCompleted
+                ? styles.statusBadgeDone
+                : styles.statusBadgeDraft,
+            ]}
+            onPress={() => toggleHarvestStatus(item.id, item.isCompleted)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`Ubah status catatan panen. Status saat ini: ${item.isCompleted ? 'Selesai / Lunas' : 'Draft'
+              }`}
+          >
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor: item.isCompleted ? '#002113' : '#B45309',
+                },
+              ]}
+            />
+            <Text
+              style={[
+                styles.statusBadgeText,
+                {
+                  color: item.isCompleted ? '#002113' : '#92400E',
+                },
+              ]}
+            >
+              {item.isCompleted ? 'Lunas / Selesai' : 'Draft'}
+            </Text>
+            <MaterialCommunityIcons
+              name="sync"
+              size={12}
+              color={item.isCompleted ? '#002113' : '#92400E'}
+            />
+          </TouchableOpacity>
         </View>
 
-        <Text style={styles.harvestTitle}>
-          Panen: {item.commodity}
-        </Text>
+        {/* Card Body */}
+        <View style={styles.harvestCardBody}>
+          <View style={styles.harvestMainInfoRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.harvestPlotTitle}>
+                {matchedLahan?.nama || 'Blok Sawah Barat'}
+              </Text>
+              <Text style={styles.harvestCycleSub}>
+                {isCorn ? 'Rotasi Palawija' : 'Siklus Musim Gadu'}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.harvestTotalPrice}>
+                {formatRupiah(totalTransaksi)}
+              </Text>
+              <Text style={styles.harvestTotalLabel}>Total Penjualan</Text>
+            </View>
+          </View>
 
-        {/* Calculation Detail Pill Box */}
-        <View style={styles.harvestDetailBox}>
-          <View style={styles.harvestCalcRow}>
-            <View style={styles.harvestQtyGroup}>
+          {/* Specifications Grid Box */}
+          <View style={styles.specsGridBox}>
+            <View style={styles.specsTopRow}>
+              <View style={styles.specItem}>
+                <MaterialCommunityIcons
+                  name="calendar-blank-outline"
+                  size={15}
+                  color="#00442F"
+                />
+                <Text style={styles.specText}>{item.date}</Text>
+              </View>
+              <View style={styles.specItem}>
+                <MaterialCommunityIcons
+                  name="ruler-square"
+                  size={15}
+                  color="#00442F"
+                />
+                <Text style={styles.specText}>
+                  Luas: {matchedLahan?.luas || '1.2 Ha'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.specWeightRow}>
               <MaterialCommunityIcons
                 name="scale"
-                size={16}
-                color={ThemeColors.primary}
+                size={15}
+                color="#00442F"
               />
-              <Text style={styles.harvestQtyText}>
+              <Text style={styles.specWeightText}>
                 {item.weightKg} {item.satuan || 'Kg'} @{' '}
                 {formatRupiah(item.hargaJual || 12000)} / {item.satuan || 'Kg'}
               </Text>
             </View>
+          </View>
 
-            {/* Task 03: Tombol Ubah Status (PATCH) 'Selesai' vs 'Draft' */}
+          {/* Buyer / Status Action Row */}
+          <View style={styles.buyerFooterRow}>
+            <View style={styles.buyerLeft}>
+              <MaterialCommunityIcons
+                name="storefront-outline"
+                size={16}
+                color={ThemeColors.textMuted}
+              />
+              <Text style={styles.buyerNameText} numberOfLines={1}>
+                {isCorn
+                  ? 'Pabrik Pakan Ternak Sukabumi'
+                  : 'Koperasi Tani Makmur Sejahtera'}
+              </Text>
+            </View>
+
             <TouchableOpacity
-              style={[
-                styles.statusBadgeBtn,
-                item.isCompleted
-                  ? styles.statusBadgeDone
-                  : styles.statusBadgeDraft,
-              ]}
+              style={styles.chevronCircleBtn}
               onPress={() => toggleHarvestStatus(item.id, item.isCompleted)}
               activeOpacity={0.75}
-              accessibilityRole="button"
-              accessibilityLabel={`Ubah status catatan panen. Status saat ini: ${
-                item.isCompleted ? 'Selesai Dipanen' : 'Draft'
-              }`}
+              accessibilityLabel="Ubah status verifikasi panen"
             >
-              <View
-                style={[
-                  styles.statusDot,
-                  {
-                    backgroundColor: item.isCompleted
-                      ? '#16A34A'
-                      : '#D97706',
-                  },
-                ]}
-              />
-              <Text
-                style={[
-                  styles.statusBadgeText,
-                  {
-                    color: item.isCompleted ? '#16A34A' : '#D97706',
-                  },
-                ]}
-              >
-                {item.isCompleted ? 'Selesai' : 'Draft'}
-              </Text>
               <MaterialCommunityIcons
-                name="sync"
-                size={12}
-                color={item.isCompleted ? '#16A34A' : '#D97706'}
-                style={{ marginLeft: 3 }}
+                name="chevron-right"
+                size={18}
+                color={ThemeColors.textSecondary}
               />
             </TouchableOpacity>
           </View>
-
-          <View style={styles.harvestTotalRow}>
-            <Text style={styles.harvestTotalLabel}>Total Penjualan:</Text>
-            <Text style={styles.harvestTotalValue}>
-              {formatRupiah(totalTransaksi)}
-            </Text>
-          </View>
         </View>
-
-        {/* Footer Info */}
-        <View style={styles.harvestFooter}>
-          <View style={styles.verifiedRow}>
-            <MaterialCommunityIcons
-              name={item.isCompleted ? 'check-decagram' : 'clock-outline'}
-              size={15}
-              color={item.isCompleted ? ThemeColors.profit : ThemeColors.warning}
-            />
-            <Text style={styles.verifiedText}>
-              {item.isCompleted ? 'Selesai Dipanen' : 'Draft (Perlu Verifikasi)'}
-            </Text>
-          </View>
-          <Text style={styles.lahanLocationText}>
-            Ketuk badge status untuk PATCH
-          </Text>
-        </View>
-      </AppCard>
+      </View>
     );
   };
+
+  const renderListFooter = () => (
+    <View style={styles.productivityCard}>
+      <View style={styles.prodHeaderRow}>
+        <View style={styles.prodHeaderLeft}>
+          <View style={styles.prodIconBox}>
+            <MaterialCommunityIcons
+              name="chart-box-outline"
+              size={18}
+              color="#00442F"
+            />
+          </View>
+          <View>
+            <Text style={styles.prodTitle}>Analisis Produktivitas</Text>
+            <Text style={styles.prodSubtitle}>
+              Tolok ukur agrikultur regional
+            </Text>
+          </View>
+        </View>
+        <View style={styles.prodEfficiencyPill}>
+          <Text style={styles.prodEfficiencyText}>+12.1% Efisiensi</Text>
+        </View>
+      </View>
+
+      <View style={styles.prodMetricBox}>
+        <View style={styles.prodMetricTopRow}>
+          <Text style={styles.prodMetricLabel}>Rata-rata Hasil Lahan</Text>
+          <Text style={styles.prodMetricValue}>
+            6.5 <Text style={styles.prodMetricUnit}>Ton / Ha</Text>
+          </Text>
+        </View>
+
+        <View style={styles.prodTrack}>
+          <View style={[styles.prodFill, { width: '78%' }]} />
+        </View>
+
+        <View style={styles.prodLegendRow}>
+          <View style={styles.prodLegendLeft}>
+            <View style={styles.prodLegendDot} />
+            <Text style={styles.prodLegendPrimary}>Lahan Anda: 6.5 T/Ha</Text>
+          </View>
+          <Text style={styles.prodLegendMuted}>
+            Rata-rata Sukabumi: 5.8 T/Ha
+          </Text>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        style={styles.exportPdfBtn}
+        onPress={handleExportPdf}
+        disabled={isExporting}
+        activeOpacity={0.85}
+      >
+        {isExporting ? (
+          <ActivityIndicator size="small" color="#00442F" />
+        ) : (
+          <>
+            <MaterialCommunityIcons
+              name="file-pdf-box"
+              size={20}
+              color="#00442F"
+            />
+            <Text style={styles.exportPdfBtnText}>
+              Ekspor Laporan Keuangan (PDF)
+            </Text>
+          </>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <KeyboardAvoidingView
       style={styles.keyboardContainer}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* Task 01: FlatList Utama dengan RefreshControl (#16A34A) */}
+      {/* Task 01: FlatList Utama dengan RefreshControl (#16A34A) & Pagination onEndReached */}
       <FlatList
-        data={harvests}
+        data={filteredHarvests}
         keyExtractor={(item) => item.id}
         renderItem={renderHarvestItem}
-        ListHeaderComponent={renderListHeader}
+        ListHeaderComponent={renderListHeader()}
+        ListFooterComponent={
+          <>
+            {renderListFooter()}
+            {loadingMore && (
+              <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color="#006C49" />
+              </View>
+            )}
+          </>
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
+        removeClippedSubviews={false}
         ListEmptyComponent={
           <AppCard style={styles.emptyCard}>
             <EmptyState
@@ -686,7 +840,12 @@ export default function PanenScreen() {
             />
           </AppCard>
         }
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingBottom: Math.max(insets.bottom, 16) + 28,
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -703,6 +862,34 @@ export default function PanenScreen() {
 }
 
 const styles = StyleSheet.create({
+  panenDateFilterRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 12,
+  },
+  panenDateFilterChip: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.full,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  panenDateFilterChipActive: {
+    backgroundColor: '#00442F',
+    borderColor: '#00442F',
+  },
+  panenDateFilterText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  panenDateFilterTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -719,7 +906,7 @@ const styles = StyleSheet.create({
   errorBox: {
     backgroundColor: '#FEE2E2',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -743,263 +930,213 @@ const styles = StyleSheet.create({
     backgroundColor: ThemeColors.background,
   },
   scrollContent: {
-    padding: Spacing.margin,
-    paddingTop: Spacing.sm,
-    paddingBottom: 28,
+    paddingHorizontal: Spacing.margin,
+    paddingTop: Spacing.md,
+    paddingBottom: 32,
   },
-  headerRow: {
+  executiveCard: {
+    marginBottom: 16,
+    padding: 20,
+    backgroundColor: '#00442F',
+    borderRadius: 16,
+  },
+  execTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.md,
+    marginBottom: 12,
   },
-  pageTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: ThemeColors.text,
-    letterSpacing: -0.3,
-  },
-  pageSubtitle: {
-    fontSize: 13,
-    color: ThemeColors.textSecondary,
-    marginTop: 2,
-    maxWidth: 260,
-  },
-  toggleAddButton: {
+  execSeasonPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: ThemeColors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: Radius.full,
-    gap: 4,
-    ...Shadows.button,
-  },
-  toggleAddButtonText: {
-    color: ThemeColors.onPrimary,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  networkStatusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: ThemeColors.surfaceSageLight,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: Radius.full,
-    alignSelf: 'flex-start',
-    marginBottom: Spacing.md,
-  },
-  networkStatusText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: ThemeColors.primary,
-    marginLeft: 6,
-  },
-  financeCard: {
-    marginBottom: Spacing.lg,
-  },
-  financeTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  financeTopLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  financeIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  financePeriodLabel: {
-    color: ThemeColors.surfaceSageLight,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  profitTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(74, 222, 128, 0.15)',
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(108, 248, 187, 0.20)',
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: Radius.full,
+    gap: 6,
   },
-  profitTagLoss: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-  },
-  pulseDot: {
+  execPulseDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    marginRight: 6,
+    backgroundColor: '#6CF8BB',
   },
-  profitTagText: {
-    color: ThemeColors.secondaryFixed,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+  execSeasonText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#6CF8BB',
+    letterSpacing: 0.3,
   },
-  profitTagTextLoss: {
-    color: ThemeColors.loss,
+  execAuditedText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8ED4B2',
   },
-  amountCol: {
-    marginBottom: Spacing.md,
+  execProfitBlock: {
+    marginBottom: 16,
   },
-  amountNumber: {
-    fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  amountSubtext: {
-    color: 'rgba(255, 255, 255, 0.7)',
+  execProfitLabel: {
     fontSize: 12,
+    fontWeight: '600',
+    color: '#8ED4B2',
+  },
+  execProfitValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.6,
     marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
-  ratioPod: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: Radius.md,
-    padding: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  ratioPodHeader: {
+  execMarginPill: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#6CF8BB',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    gap: 5,
+    marginTop: 8,
   },
-  ratioHeaderLeft: {
+  execMarginPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#002113',
+  },
+  execSplitRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  execSplitBox: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 10,
+    padding: 10,
+  },
+  execSplitHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  ratioPodTitle: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 11,
+  execSplitLabel: {
+    fontSize: 10.5,
     fontWeight: '600',
+    color: '#8ED4B2',
   },
-  ratioPodPercent: {
-    color: ThemeColors.secondaryFixed,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  progressTrack: {
-    height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: ThemeColors.secondaryFixed,
-    borderRadius: Radius.full,
-  },
-  breakdownGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  breakdownCol: {
-    flex: 1,
-  },
-  breakdownLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  breakdownDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 6,
-  },
-  breakdownLabel: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  breakdownValue: {
-    color: '#FFFFFF',
+  execSplitValue: {
     fontSize: 15,
     fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 4,
+    fontVariant: ['tabular-nums'],
   },
-  breakdownSub: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: 10,
-    marginTop: 1,
+  execSplitSubMint: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#6CF8BB',
+    marginTop: 2,
+  },
+  execSplitSubMuted: {
+    fontSize: 10.5,
+    fontWeight: '500',
+    color: '#DAE2FD',
+    marginTop: 2,
+  },
+  calloutRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  addHarvestMainBtn: {
+    flex: 1,
+    height: 48,
+    backgroundColor: '#00442F',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    ...Shadows.button,
+  },
+  addHarvestMainBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  filterHarvestBtn: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: ThemeColors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.subtle,
   },
   formCard: {
-    marginBottom: Spacing.lg,
-    padding: Spacing.lg,
+    marginBottom: 18,
   },
   formTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    gap: 10,
+    marginBottom: 14,
   },
   formIconBox: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     borderRadius: 10,
-    backgroundColor: ThemeColors.surfaceSageLight,
+    backgroundColor: ThemeColors.surfaceLow,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
   },
   formTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: ThemeColors.text,
   },
   formSubtitle: {
     fontSize: 12,
     color: ThemeColors.textSecondary,
-    marginTop: 2,
+    marginTop: 1,
   },
   fieldGroup: {
-    marginBottom: Spacing.md,
+    marginBottom: 14,
   },
   fieldLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: ThemeColors.textSecondary,
+    color: ThemeColors.text,
     marginBottom: 6,
   },
   lahanChipsRow: {
     gap: 8,
-    paddingVertical: 2,
   },
   lahanChip: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: Radius.full,
-    backgroundColor: ThemeColors.surfaceSageLight,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    gap: 6,
+    backgroundColor: ThemeColors.surfaceLow,
+    gap: 5,
   },
   lahanChipSelected: {
-    backgroundColor: ThemeColors.primary,
-    borderColor: ThemeColors.primary,
+    backgroundColor: '#135D43',
   },
   lahanChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: ThemeColors.text,
+    color: ThemeColors.textSecondary,
   },
   lahanChipTextSelected: {
-    color: ThemeColors.onPrimary,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   qtySatuanRow: {
@@ -1020,41 +1157,42 @@ const styles = StyleSheet.create({
   satuanChip: {
     paddingHorizontal: 10,
     paddingVertical: 7,
-    borderRadius: Radius.md,
-    backgroundColor: ThemeColors.surfaceSageLight,
+    borderRadius: 10,
+    backgroundColor: ThemeColors.surfaceLow,
   },
   satuanChipSelected: {
-    backgroundColor: ThemeColors.primary,
+    backgroundColor: '#135D43',
   },
   satuanChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: ThemeColors.text,
+    color: ThemeColors.textSecondary,
   },
   satuanChipTextSelected: {
-    color: ThemeColors.onPrimary,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   currencyPrefix: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
-    color: ThemeColors.primary,
+    color: '#135D43',
   },
   liveCalcCard: {
-    backgroundColor: ThemeColors.surfaceSageLight,
-    padding: Spacing.sm,
-    borderRadius: Radius.md,
-    marginBottom: Spacing.md,
+    backgroundColor: ThemeColors.surfaceLow,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 14,
   },
   liveCalcHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     marginBottom: 4,
   },
   liveCalcTitle: {
     fontSize: 10,
     fontWeight: '700',
-    color: ThemeColors.primary,
+    color: '#135D43',
     letterSpacing: 0.5,
   },
   liveCalcRow: {
@@ -1070,137 +1208,86 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: ThemeColors.text,
-  },
-  submitBtn: {
-    marginTop: Spacing.xs,
+    fontVariant: ['tabular-nums'],
   },
   sectionHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   sectionHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: ThemeColors.text,
   },
-  countBadge: {
-    backgroundColor: ThemeColors.surfaceSageLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-  },
-  countBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: ThemeColors.primary,
+  sectionCountText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: ThemeColors.textMuted,
   },
   emptyCard: {
     padding: Spacing.xl,
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: 16,
   },
   harvestCard: {
-    marginBottom: Spacing.md,
-    padding: Spacing.md,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  harvestAccentStrip: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 4,
-    height: '100%',
-    backgroundColor: ThemeColors.primary,
-  },
-  harvestHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  harvestHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  harvestCategoryPill: {
-    backgroundColor: 'rgba(0, 108, 73, 0.08)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-  },
-  harvestCategoryText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: ThemeColors.primary,
-  },
-  harvestDateText: {
-    fontSize: 11,
-    color: ThemeColors.textSecondary,
-  },
-  harvestIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: ThemeColors.surfaceSageLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  harvestTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: ThemeColors.text,
-    marginBottom: 8,
-  },
-  harvestDetailBox: {
-    backgroundColor: '#F8FAFC',
-    padding: 10,
-    borderRadius: Radius.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 8,
+    overflow: 'hidden',
+    marginBottom: 14,
   },
-  harvestCalcRow: {
+  harvestBannerHeader: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  harvestQtyGroup: {
+  harvestBannerRice: {
+    backgroundColor: '#ECFDF5',
+  },
+  harvestBannerCorn: {
+    backgroundColor: '#FEF3C7',
+  },
+  harvestCommodityPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    flex: 1,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 5,
   },
-  harvestQtyText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
+  harvestCommodityPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#00442F',
   },
   statusBadgeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: Radius.full,
-    borderWidth: 1,
     gap: 4,
   },
   statusBadgeDone: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
+    backgroundColor: '#6CF8BB',
   },
   statusBadgeDraft: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
+    backgroundColor: '#FDE68A',
   },
   statusDot: {
     width: 6,
@@ -1208,46 +1295,223 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
   },
-  harvestTotalRow: {
+  harvestCardBody: {
+    padding: 15,
+    gap: 10,
+  },
+  harvestMainInfoRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    gap: 8,
   },
-  harvestTotalLabel: {
-    fontSize: 12,
-    color: ThemeColors.textSecondary,
-    fontWeight: '500',
-  },
-  harvestTotalValue: {
-    fontSize: 14,
-    fontWeight: '800',
+  harvestPlotTitle: {
+    fontSize: 16,
+    fontWeight: '700',
     color: ThemeColors.text,
   },
-  harvestFooter: {
+  harvestCycleSub: {
+    fontSize: 12,
+    color: ThemeColors.textMuted,
+    marginTop: 1,
+  },
+  harvestTotalPrice: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#00442F',
+    fontVariant: ['tabular-nums'],
+  },
+  harvestTotalLabel: {
+    fontSize: 10.5,
+    color: ThemeColors.textMuted,
+    marginTop: 1,
+  },
+  specsGridBox: {
+    backgroundColor: ThemeColors.surfaceLow,
+    borderRadius: 10,
+    padding: 10,
+    gap: 6,
+  },
+  specsTopRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  specItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  specText: {
+    fontSize: 11.5,
+    color: ThemeColors.textSecondary,
+    fontWeight: '600',
+  },
+  specWeightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingTop: 2,
+  },
+  specWeightText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: ThemeColors.text,
+    fontVariant: ['tabular-nums'],
+  },
+  buyerFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 4,
+    paddingTop: 2,
   },
-  verifiedRow: {
+  buyerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    flex: 1,
   },
-  verifiedText: {
+  buyerNameText: {
+    fontSize: 12,
+    color: ThemeColors.text,
+    fontWeight: '500',
+    flex: 1,
+  },
+  chevronCircleBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: Radius.full,
+    backgroundColor: ThemeColors.surfaceContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productivityCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: ThemeColors.border,
+    gap: 14,
+    marginTop: 4,
+    ...Shadows.card,
+  },
+  prodHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  prodHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  prodIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    backgroundColor: ThemeColors.surfaceHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  prodTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: ThemeColors.text,
+  },
+  prodSubtitle: {
     fontSize: 11,
+    color: ThemeColors.textMuted,
+    marginTop: 1,
+  },
+  prodEfficiencyPill: {
+    backgroundColor: 'rgba(108, 248, 187, 0.30)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  prodEfficiencyText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#00714D',
+  },
+  prodMetricBox: {
+    backgroundColor: ThemeColors.surfaceLow,
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+  },
+  prodMetricTopRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+  },
+  prodMetricLabel: {
+    fontSize: 12,
     fontWeight: '600',
     color: ThemeColors.textSecondary,
   },
-  lahanLocationText: {
+  prodMetricValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#00442F',
+    fontVariant: ['tabular-nums'],
+  },
+  prodMetricUnit: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: ThemeColors.text,
+  },
+  prodTrack: {
+    height: 9,
+    backgroundColor: '#DAE2FD',
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  prodFill: {
+    height: '100%',
+    backgroundColor: '#00442F',
+    borderRadius: Radius.full,
+  },
+  prodLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  prodLegendLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  prodLegendDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#00442F',
+  },
+  prodLegendPrimary: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#00442F',
+  },
+  prodLegendMuted: {
     fontSize: 11,
     color: ThemeColors.textMuted,
-    fontStyle: 'italic',
+  },
+  exportPdfBtn: {
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: ThemeColors.surfaceHigh,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  exportPdfBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#00442F',
   },
 });
